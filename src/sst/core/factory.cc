@@ -18,8 +18,10 @@
 #include <tuple>
 #include <stdio.h>
 
+#include "sst/core/part/sstpart.h"
 #include "sst/core/simulation.h"
 #include "sst/core/component.h"
+#include "sst/core/subcomponent.h"
 #include "sst/core/element.h"
 #include <sst/core/elementinfo.h>
 #include "sst/core/params.h"
@@ -44,7 +46,7 @@ using namespace SST::Statistics;
 namespace SST {
 
 Factory* Factory::instance = NULL;
-SSTElementPythonModuleOldELI* PythonModuleDocOldELI::instance = NULL;
+//SSTElementPythonModuleOldELI* PythonModuleDocOldELI::instance = NULL;
 
 
 ElementLibraryInfo empty_eli = {
@@ -118,24 +120,21 @@ bool Factory::isPortNameValid(const std::string &type, const std::string port_na
         findLibrary(elemlib);
     }
 
+
     const std::vector<std::string> *portNames = NULL;
 
-    // Check to see if library is loaded into new
-    // ElementLibraryDatabase
-    LibraryInfo* lib = ElementLibraryDatabase::getLibraryInfo(elemlib);
-    if ( lib != NULL ) {
-        ComponentElementInfo* comp = lib->getComponent(elem);
-        if ( comp != NULL ) {
-            portNames = &(comp->getPortnames());
-        }
-        else {
-            SubComponentElementInfo* subcomp = lib->getSubComponent(elem);
-            if ( subcomp != NULL ) {
-                portNames = &(subcomp->getPortnames());
-            }
-        }
+    auto* compLib = Component::getLibrary(elemlib);
+    if (compLib){
+      auto* compFact = compLib->getFactory(elem);
+      if (compFact) portNames = &compFact->getPortnames();
+    } else {
+      auto* subcompLib = ELI::ElementDatabase::getLibrary<SubComponent>(elemlib);
+      if (subcompLib){
+        auto* subcompFact = subcompLib->getFactory(elem);
+        if (subcompFact) portNames = &subcompFact->getPortnames();
+      }
     }
-    
+
     std::string tmp = elemlib + "." + elem;
 
     if ( portNames == NULL ) {
@@ -153,7 +152,7 @@ bool Factory::isPortNameValid(const std::string &type, const std::string port_na
 
 Component*
 Factory::CreateComponent(ComponentId_t id, 
-                         std::string &type, 
+                         const std::string &type,
                          Params& params)
 {
     std::string elemlib, elem;
@@ -164,53 +163,23 @@ Factory::CreateComponent(ComponentId_t id,
     requireLibrary(elemlib);
 
     std::lock_guard<std::recursive_mutex> lock(factoryMutex);
-    // Check to see if library is loaded into new
-    // ElementLibraryDatabase
-    LibraryInfo* lib = ElementLibraryDatabase::getLibraryInfo(elemlib);
-    if ( lib != NULL ) {
-        ComponentElementInfo* comp = lib->getComponent(elem);
-        if ( comp != NULL ) {
-            LinkMap *lm = Simulation::getSimulation()->getComponentLinkMap(id);
-            lm->setAllowedPorts(&(comp->getPortnames()));
+    auto* lib = Component::getLibrary(elemlib);
+    if (lib) {
+      auto* factory = lib->getFactory(elem);
+      if (factory){
+        LinkMap *lm = Simulation::getSimulation()->getComponentLinkMap(id);
+        lm->setAllowedPorts(&(factory->getPortnames()));
 
-            loadingComponentType = type;    
-            params.pushAllowedKeys(comp->getParamNames());
-            Component *ret = comp->create(id, params);
-            params.popAllowedKeys();
-            loadingComponentType = "";
-            return ret;
-        }
+        loadingComponentType = type;
+        params.pushAllowedKeys(factory->getParamNames());
+        Component *ret = factory->create(id, params);
+        params.popAllowedKeys();
+        loadingComponentType = "";
+        return ret;
+      }
     }
     // If we make it to here, component not found
     out.fatal(CALL_INFO, -1,"can't find requested component %s.\n ", type.c_str());
-    return NULL;
-}
-
-Statistics::StatisticBase*
-Factory::CreateStatistic(Statistics::FieldId_t id, std::string type,
-                         BaseComponent* comp, const std::string& statName,
-                         const std::string& stat, Params& params)
-{
-    std::string elemlib, elem;
-
-    std::tie(elemlib, elem) = parseLoadName(type);
-
-    // ensure library is already loaded...
-    requireLibrary(elemlib);
-
-    std::lock_guard<std::recursive_mutex> lock(factoryMutex);
-    // Check to see if library is loaded into new
-    // ElementLibraryDatabase
-    LibraryInfo* lib = ElementLibraryDatabase::getLibraryInfo(elemlib);
-    if ( lib != nullptr ) {
-        StatisticElementInfo* info = lib->getStatistic(id, elem);
-        if (info){
-          StatisticBase* base = info->create(comp, statName, stat, params);
-          return base;
-        }
-    }
-    // If we make it to here, component not found
-    out.fatal(CALL_INFO, -1,"can't find requested statistic %s.\n ", type.c_str());
     return NULL;
 }
 
@@ -245,23 +214,30 @@ Factory::DoesSubComponentSlotExist(const std::string& type, const std::string& s
 
     std::lock_guard<std::recursive_mutex> lock(factoryMutex);
 
-    // Check to see if library is loaded into new
-    // ElementLibraryDatabase
-    LibraryInfo* lib = ElementLibraryDatabase::getLibraryInfo(elemlib);
-    if ( lib != NULL ) {
-        BaseComponentElementInfo* comp = lib->getComponentOrSubComponent(elem);
-        if ( comp != NULL ) {
-            for ( auto item : comp->getSubComponentSlots() ) {
-                if ( slotName == item.name ) {
-                    return true;
-                }
-            }
-            return false;
+    auto* compLib = ELI::ElementDatabase::getLibrary<Component>(elemlib);
+    if (compLib){
+      auto* fact = compLib->getFactory(elem);
+      if (fact){
+        for (auto& item : fact->getSubComponentSlots()){
+          if (item.name == slotName) return true;
         }
+      }
+      return false;
+    }
+
+    auto* subLib = ELI::ElementDatabase::getLibrary<SubComponent>(elemlib);
+    if (subLib){
+      auto* fact = subLib->getFactory(elem);
+      if (fact){
+        for (auto& item : fact->getSubComponentSlots()){
+          if (item.name == slotName) return true;
+        }
+      }
+      return false;
     }
 
     // If we get to here, element doesn't exist
-    out.fatal(CALL_INFO, -1,"can't find requested component/subcomponent %s.\n ", type.c_str());
+    out.fatal(CALL_INFO, -1,"can't find requested component/subcomponent %s\n ", type.c_str());
     return false;
 }
 
@@ -281,21 +257,18 @@ Factory::DoesComponentInfoStatisticNameExist(const std::string& type, const std:
 
     std::lock_guard<std::recursive_mutex> lock(factoryMutex);
 
-    // Check to see if library is loaded into new
-    // ElementLibraryDatabase
-    LibraryInfo* lib = ElementLibraryDatabase::getLibraryInfo(elemlib);
-    if ( lib != NULL ) {
-        ComponentElementInfo* comp = lib->getComponent(elem);
-        if ( comp != NULL ) {
-            for ( auto item : comp->getStatnames() ) {
-                if ( statisticName == item ) {
-                    return true;
-                }
+    auto* lib = ELI::ElementDatabase::getLibrary<Component>(elemlib);
+    if (lib){
+      auto* fact = lib->getFactory(elem);
+      if (fact){
+        for (auto& item : fact->getStatnames()) {
+            if (statisticName == item) {
+                return true;
             }
-            return false;
         }
+        return false;
+      }
     }
-
     
     // If we get to here, element doesn't exist
     out.fatal(CALL_INFO, -1,"can't find requested component %s.\n ", type.c_str());
@@ -318,19 +291,17 @@ Factory::DoesSubComponentInfoStatisticNameExist(const std::string& type, const s
 
     std::lock_guard<std::recursive_mutex> lock(factoryMutex);
 
-    // Check to see if library is loaded into new
-    // ElementLibraryDatabase
-    LibraryInfo* lib = ElementLibraryDatabase::getLibraryInfo(elemlib);
-    if ( lib != NULL ) {
-        SubComponentElementInfo* subcomp = lib->getSubComponent(elem);
-        if ( subcomp != NULL ) {
-            for ( auto item : subcomp->getStatnames() ) {
-                if ( statisticName == item ) {
-                    return true;
-                }
+    auto* lib = ELI::ElementDatabase::getLibrary<SubComponent>(elemlib);
+    if (lib){
+      auto* fact = lib->getFactory(elem);
+      if (fact){
+        for ( auto& item : fact->getStatnames() ) {
+            if ( statisticName == item ) {
+                return true;
             }
-            return false;
         }
+        return false;
+      }
     }
 
     // If we get to here, element doesn't exist
@@ -354,19 +325,30 @@ Factory::GetComponentInfoStatisticEnableLevel(const std::string& type, const std
 
     std::lock_guard<std::recursive_mutex> lock(factoryMutex);
 
-    // Check to see if library is loaded into new
-    // ElementLibraryDatabase
-    LibraryInfo* lib = ElementLibraryDatabase::getLibraryInfo(elemlib);
-    if ( lib != NULL ) {
-        BaseComponentElementInfo* comp = lib->getComponentOrSubComponent(elem);
-        if ( comp != NULL ) {
-            for ( auto item : comp->getValidStats() ) {
-                if ( statisticName == item.name ) {
-                    return item.enableLevel;
-                }
+    auto* compLib = ELI::ElementDatabase::getLibrary<Component>(elemlib);
+    if (compLib){
+      auto* fact = compLib->getFactory(elem);
+      if (fact){
+        for ( auto& item : fact->getValidStats() ) {
+            if ( statisticName == item.name ) {
+                return item.enableLevel;
             }
-            return 0;
         }
+      }
+      return 0;
+    }
+
+    auto* subLib = ELI::ElementDatabase::getLibrary<SubComponent>(elemlib);
+    if (subLib){
+      auto* fact = subLib->getFactory(elem);
+      if (fact){
+        for ( auto& item : fact->getValidStats() ) {
+            if ( statisticName == item.name ) {
+                return item.enableLevel;
+            }
+        }
+      }
+      return 0;
     }
 
     // If we get to here, element doesn't exist
@@ -390,17 +372,30 @@ Factory::GetComponentInfoStatisticUnits(const std::string& type, const std::stri
         findLibrary(elemlib);
     }
 
-    LibraryInfo* lib = ElementLibraryDatabase::getLibraryInfo(elemlib);
-    if ( lib != NULL ) {
-        BaseComponentElementInfo* comp = lib->getComponentOrSubComponent(elem);
-        if ( comp != NULL ) {
-            for ( auto item : comp->getValidStats() ) {
-                if ( statisticName == item.name ) {
-                    return item.units;
-                }
+    auto* compLib = ELI::ElementDatabase::getLibrary<Component>(elemlib);
+    if (compLib){
+      auto* fact = compLib->getFactory(elem);
+      if (fact){
+        for ( auto& item : fact->getValidStats() ) {
+            if ( statisticName == item.name ) {
+                return item.units;
             }
-            return 0;
         }
+      }
+      return 0;
+    }
+
+    auto* subLib = ELI::ElementDatabase::getLibrary<SubComponent>(elemlib);
+    if (subLib){
+      auto* fact = subLib->getFactory(elem);
+      if (fact){
+        for ( auto& item : fact->getValidStats() ) {
+            if ( statisticName == item.name ) {
+                return item.units;
+            }
+        }
+      }
+      return 0;
     }
 
     // If we get to here, element doesn't exist
@@ -409,7 +404,7 @@ Factory::GetComponentInfoStatisticUnits(const std::string& type, const std::stri
 }
 
 Module*
-Factory::CreateModule(std::string type, Params& params)
+Factory::CreateModule(const std::string& type, Params& params)
 {
     if("" == type) {
         Simulation::getSimulation()->getSimulationOutput().fatal(CALL_INFO,
@@ -422,19 +417,16 @@ Factory::CreateModule(std::string type, Params& params)
     requireLibrary(elemlib);
     std::lock_guard<std::recursive_mutex> lock(factoryMutex);
 
-    // Check to see if library is loaded into new
-    // ElementLibraryDatabase
-    LibraryInfo* lib = ElementLibraryDatabase::getLibraryInfo(elemlib);
-    if ( lib != NULL ) {
-        ModuleElementInfo* module = lib->getModule(elem);
-        if ( module != NULL ) {
-            params.pushAllowedKeys(module->getParamNames());
-            Module *ret = module->create(params);
-            params.popAllowedKeys();
-            return ret;
-        }
+    auto* lib = Module::Library<SST::Params&>::get(elemlib);
+    if (lib){
+      auto* fact = lib->getFactory(elem);
+      if (fact){
+        params.pushAllowedKeys(fact->getParamNames());
+        Module *ret = fact->create(params);
+        params.popAllowedKeys();
+        return ret;
+      }
     }
-
     
     // If we get to here, element doesn't exist
     out.fatal(CALL_INFO, -1, "can't find requested module %s.\n ", type.c_str());
@@ -443,13 +435,13 @@ Factory::CreateModule(std::string type, Params& params)
 
 
 Module* 
-Factory::LoadCoreModule_StatisticOutputs(std::string& type, Params& params)
+Factory::LoadCoreModule_StatisticOutputs(const std::string& type, Params& params)
 {
   return CreateStatisticOutput(type, params);
 }
 
 Module*
-Factory::CreateModuleWithComponent(std::string type, Component* comp, Params& params)
+Factory::CreateModuleWithComponent(const std::string& type, Component* comp, Params& params)
 {
     std::string elemlib, elem;
     std::tie(elemlib, elem) = parseLoadName(type);
@@ -459,17 +451,15 @@ Factory::CreateModuleWithComponent(std::string type, Component* comp, Params& pa
 
     std::lock_guard<std::recursive_mutex> lock(factoryMutex);
 
-    // Check to see if library is loaded into new
-    // ElementLibraryDatabase
-    LibraryInfo* lib = ElementLibraryDatabase::getLibraryInfo(elemlib);
-    if ( lib != NULL ) {
-        ModuleElementInfo* module = lib->getModule(elem);
-        if ( module != NULL ) {
-            params.pushAllowedKeys(module->getParamNames());
-            Module *ret = module->create(comp,params);
-            params.popAllowedKeys();
-            return ret;
-        }
+    auto* lib = ELI::ElementDatabase::getLibrary<Module,Component*,SST::Params&>(elemlib);
+    if (lib){
+      auto* fact = lib->getFactory(elem);
+      if (fact){
+        params.pushAllowedKeys(fact->getParamNames());
+        Module *ret = fact->create(comp,params);
+        params.popAllowedKeys();
+        return ret;
+      }
     }
 
     // If we get to here, element doesn't exist
@@ -480,7 +470,7 @@ Factory::CreateModuleWithComponent(std::string type, Component* comp, Params& pa
 
 
 SubComponent*
-Factory::CreateSubComponent(std::string type, Component* comp, Params& params)
+Factory::CreateSubComponent(const std::string& type, Component* comp, Params& params)
 {
     std::string elemlib, elem;
     std::tie(elemlib, elem) = parseLoadName(type);
@@ -491,15 +481,16 @@ Factory::CreateSubComponent(std::string type, Component* comp, Params& params)
     std::lock_guard<std::recursive_mutex> lock(factoryMutex);
     // Check to see if library is loaded into new
     // ElementLibraryDatabase
-    LibraryInfo* lib = ElementLibraryDatabase::getLibraryInfo(elemlib);
-    if ( lib != NULL ) {
-        SubComponentElementInfo* subcomp = lib->getSubComponent(elem);
-        if ( subcomp != NULL ) {
-            params.pushAllowedKeys(subcomp->getParamNames());
-            SubComponent* ret = subcomp->create(comp, params);
-            params.popAllowedKeys();
-            return ret;
-        }
+
+    auto* lib = SubComponent::getLibrary(elemlib);
+    if (lib){
+      auto* fact = lib->getFactory(elem);
+      if (fact){
+        params.pushAllowedKeys(fact->getParamNames());
+        SubComponent* ret = fact->create(comp, params);
+        params.popAllowedKeys();
+        return ret;
+      }
     }
 
     // If we get to here, element doesn't exist
@@ -509,7 +500,7 @@ Factory::CreateSubComponent(std::string type, Component* comp, Params& params)
 
 
 void
-Factory::RequireEvent(std::string eventname)
+Factory::RequireEvent(const std::string& eventname)
 {
     std::string elemlib, elem;
     std::tie(elemlib, elem) = parseLoadName(eventname);
@@ -539,14 +530,12 @@ Factory::CreatePartitioner(std::string name, RankInfo total_ranks, RankInfo my_r
     // ensure library is already loaded...
     requireLibrary(elemlib);
 
-    // Check to see if library is loaded into new
-    // ElementLibraryDatabase
-    LibraryInfo* lib = ElementLibraryDatabase::getLibraryInfo(elemlib);
-    if ( lib != NULL ) {
-        PartitionerElementInfo* part = lib->getPartitioner(elem);
-        if ( part != NULL ) {
-            return part->create(total_ranks, my_rank, verbosity);
-        }
+    auto* lib = Partition::SSTPartitioner::getLibrary(elemlib);
+    if (lib){
+      auto* fact = lib->getFactory(elem);
+      if (fact){
+        return fact->create(total_ranks, my_rank, verbosity);
+      }
     }
 
     // If we get to here, element doesn't exist
@@ -585,14 +574,12 @@ Factory::getPythonModule(std::string name)
     std::string elemlib, elem;
     std::tie(elemlib, elem) = parseLoadName(name);
 
-    // Check to see if library is loaded into new
-    // ElementLibraryDatabase
-    LibraryInfo* lib = ElementLibraryDatabase::getLibraryInfo(elemlib);
-    if ( lib != NULL ) {
-        PythonModuleElementInfo* pymod = lib->getPythonModule();
-        if ( pymod != NULL ) {
-            return pymod->create();
-        }
+    auto* lib = ELI::ElementDatabase::getLibrary<SSTElementPythonModule>(elemlib);
+    if (lib) {
+      auto* fact = lib->getFactory(elem);
+      if (fact){
+        return fact->create();
+      }
     }
 
     return NULL;
@@ -602,7 +589,7 @@ Factory::getPythonModule(std::string name)
 
 bool Factory::hasLibrary(std::string elemlib)
 {
-    return (NULL != findLibrary(elemlib, false));
+    return (NULL != findLibrary(elemlib, true));
 }
 
 
@@ -630,12 +617,13 @@ void Factory::loadUnloadedLibraries(const std::set<std::string>& lib_names)
             findLibrary(*i);
         }
 }
+
     
 const ElementLibraryInfo*
 Factory::findLibrary(std::string elemlib, bool showErrors)
 {
-    if ( elemlib == "sst" ) return NULL;
-    const ElementLibraryInfo *eli = NULL;
+    if ( elemlib == "sst" ) return nullptr;
+    const ElementLibraryInfo *eli = nullptr;
     std::lock_guard<std::recursive_mutex> lock(factoryMutex);
 
     eli_map_t::iterator elii = loaded_libraries.find(elemlib);
@@ -644,7 +632,7 @@ Factory::findLibrary(std::string elemlib, bool showErrors)
 
     // eli = loader->loadLibrary(elemlib, showErrors);
     eli = loadLibrary(elemlib, showErrors);
-    if (NULL == eli) return NULL;
+    if (nullptr == eli) return nullptr;
 
 
 
@@ -652,48 +640,51 @@ Factory::findLibrary(std::string elemlib, bool showErrors)
     // structures
     loaded_libraries[elemlib] = eli;
 
-    if (NULL != eli->components) {
-        const ElementInfoComponent *eic = eli->components;
-        while (NULL != eic->name) {
-            ElementLibraryDatabase::addComponent(new ComponentDocOldELI(elemlib, eic));
-            eic++;
-        }
+    if (NULL != eli->components) { //use NULL I guess for C?
+      const auto *eic = eli->components;
+      auto* lib = Component::getLibrary(elemlib);
+      while (NULL != eic->name) {
+        auto* fact = new Component::Factory<OldELITag>(OldELITag{elemlib}, eic->alloc, eic);
+        lib->addFactory(fact);
+        eic++;
+      }
     }
 
-    // if (NULL != eli->events) {
-    //     const ElementInfoEvent *eie = eli->events;
-    //     while (NULL != eie->name) {
-    //         std::string tmp = elemlib + "." + eie->name;
-    //         found_events[tmp] = eie;
-    //         if (eie->init != NULL) eie->init();
-    //         eie++;
-    //     }
-    // }
+    if (NULL != eli->subcomponents) { //use NULL I guess for C?
+      const auto *eis = eli->subcomponents;
+      auto* lib = SubComponent::getLibrary(elemlib);
+      while (NULL != eis->name) {
+        auto* fact = new SubComponent::Factory<OldELITag>(OldELITag{elemlib}, eis->alloc, eis);
+        lib->addFactory(fact);
+        eis++;
+      }
+    }
+
+    if (NULL != eli->partitioners) { //use NULL I guess for C?
+      const auto *eis = eli->partitioners;
+      auto* lib = Partition::SSTPartitioner::getLibrary(elemlib);
+      while (NULL != eis->name) {
+        auto* fact = new Partition::SSTPartitioner::Factory<OldELITag>(OldELITag{elemlib}, eis->func, eis);
+        lib->addFactory(fact);
+        eis++;
+      }
+    }
 
 
     if (NULL != eli->modules) {
-        const ElementInfoModule *eim = eli->modules;
-        while (NULL != eim->name) {
-            ElementLibraryDatabase::addModule(new ModuleDocOldELI(elemlib, eim));
-            eim++;
-        }
+      const ElementInfoModule *eim = eli->modules;
+      while (NULL != eim->name) {
+        auto* withComp = new Module::Instance<OldELITag,Component*,SST::Params&>(
+                                OldELITag{elemlib},  eim->alloc_with_comp, eim);
+        Module::Library<Component*,SST::Params&>::get(elemlib)->addFactory(withComp);
+
+        auto* withoutComp = new Module::Instance<OldELITag,SST::Params&>(
+                                OldELITag{elemlib}, eim->alloc, eim);
+        Module::Library<SST::Params&>::get(elemlib)->addFactory(withoutComp);
+        eim++;
+      }
     }
 
-    if (NULL != eli->subcomponents ) {
-        const ElementInfoSubComponent *eis = eli->subcomponents;
-        while (NULL != eis->name) {
-            ElementLibraryDatabase::addSubComponent(new SubComponentDocOldELI(elemlib, eis));
-            eis++;
-        }
-    }
-
-    if (NULL != eli->partitioners) {
-        const ElementInfoPartitioner *eip = eli->partitioners;
-        while (NULL != eip->name) {
-            ElementLibraryDatabase::addPartitioner(new PartitionerDocOldELI(elemlib, eip));
-            eip++;
-        }
-    }
 
     if (NULL != eli->generators) {
         const ElementInfoGenerator *eig = eli->generators;
@@ -704,9 +695,12 @@ Factory::findLibrary(std::string elemlib, bool showErrors)
         }
     }
 
-    if (NULL != eli->pythonModuleGenerator ) {
-        ElementLibraryDatabase::addPythonModule(new PythonModuleDocOldELI(elemlib, eli->pythonModuleGenerator));
-    }
+    //if (NULL != eli->pythonModuleGenerator ) {
+    //  auto* fact = new FactoryFinal<SSTElementPythonModule,OldELITag>(OldELITag{},
+    //                                  })
+    //  ElementDatabase::getLibrary<SSTElementPythonModule>
+    //    ElementLibraryDatabase::addPythonModule(new PythonModuleDocOldELI(elemlib, eli->pythonModuleGenerator));
+    //}
     
     return eli;
 }
@@ -734,7 +728,7 @@ const ElementLibraryInfo* Factory::loadLibrary(std::string name, bool showErrors
     if ( NULL == eli ) {
         // Check to see if this library loaded into the new ELI
         // Database
-        if ( NULL != ElementLibraryDatabase::getLibraryInfo(name) ) {
+        if (ELI::DataBase::isLoaded(name)) {
             // Need to just return the empty ElementLibraryInfo
             return &empty_eli;
         }

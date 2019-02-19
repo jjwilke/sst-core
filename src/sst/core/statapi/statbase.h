@@ -25,6 +25,7 @@
 namespace SST {
 class BaseComponent;
 class Factory;
+
 namespace Statistics {
 class StatisticOutput;
 class StatisticProcessingEngine;
@@ -296,10 +297,14 @@ struct StatisticCollector<T,true> {
  virtual void addData_impl(T data) = 0;
 };
 
-template <class T>
-struct StatisticCollector<T,false> {
- virtual void addData_impl(T&& data) = 0;
- virtual void addData_impl(const T& data) = 0;
+template <class... Args>
+struct StatisticCollector<std::tuple<Args...>,false> {
+ virtual void addData_impl(Args... args) = 0;
+
+ template <class... InArgs>
+ void addData(InArgs&&... args){
+    addData_impl(std::make_tuple(std::forward<InArgs>(args)...));
+ }
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -312,23 +317,24 @@ struct StatisticCollector<T,false> {
 	@tparam T A template for the basic numerical data stored by this Statistic
 */
 
-
-template <typename T>
+template <typename T, class... CtorArgs>
 class Statistic : public StatisticBase, public StatisticCollector<T>
 {
-public:
+ public:
+  ELI_RegisterBase(Statistic,ELI::ImplementsInterface)
+    using Datum = T;
     using StatisticCollector<T>::addData_impl;
     // The main method to add data to the statistic 
     /** Add data to the Statistic
       * This will call the addData_impl() routine in the derived Statistic.
      */
-    template <class U> //use a universal reference here
-    void addData(U&& data)
+    template <class... InArgs> //use a universal reference here
+    void addData(InArgs&&... args)
     {
         // Call the Derived Statistic's implementation 
         //  of addData and increment the count
         if (isEnabled()) {
-            addData_impl(std::forward<U>(data));
+            addData_impl(std::forward<InArgs>(args)...);
             incrementCollectionCount();
         }
     }
@@ -347,7 +353,9 @@ protected:
       * @param statSubId - Additional name of the statistic 
       * @param statParams - The parameters for this statistic
       */
-    Statistic(BaseComponent* comp, const std::string& statName, const std::string& statSubId, Params& statParams) :
+
+    Statistic(BaseComponent* comp, const std::string& statName,
+              const std::string& statSubId, Params& statParams) :
         StatisticBase(comp, statName, statSubId, statParams)
     {
         setStatisticDataType(StatisticFieldInfo::getFieldTypeFromTemplate<T>());
@@ -361,112 +369,59 @@ private:
 
 };
 
+template <class... CtorArgs>
+struct MultiCtor {
+  template <class... StatArgs> using Statistic =
+    ::SST::Statistics::Statistic<std::tuple<StatArgs...>, CtorArgs...>;
+};
+
+template <class... Args>
+using MultiStatistic = Statistic<std::tuple<Args...>>;
+
 template <class T> struct TemplateStatInstantiation {
   static bool isInstantiated(){ return instantiated; }
   static bool instantiated;
 };
 template <class T> bool TemplateStatInstantiation<T>::instantiated = true;
 
-class StatisticElementInfo : public BaseElementInfo {
 
-public:
-    virtual StatisticBase* create(BaseComponent* UNUSED(comp),
-                                  const std::string& UNUSED(statName),
-                                  const std::string& UNUSED(statSubId),
-                                  Params& UNUSED(statParams)) {
-      return nullptr;
-    }
+struct ImplementsStatFields {
+ public:
+  std::string toString() const;
 
-    virtual const std::string getInterface() = 0;
+  Statistics::FieldId_t fieldId() const {
+    return field_;
+  }
 
-    std::string toString();
+  const char* fieldName() const {
+    return field_name_;
+  }
 
-    virtual Statistics::FieldId_t fieldId() const = 0;
+  const char* fieldShortName() const {
+    return short_name_;
+  }
 
-    virtual const char* fieldName() const = 0;
+ protected:
+  template <class T> ImplementsStatFields(T* UNUSED(t)) :
+    field_name_(T::ELI_fieldName()),
+    short_name_(T::ELI_fieldShortName()),
+    field_(T::ELI_registerField(T::ELI_fieldName(), T::ELI_fieldShortName()))
+  {
+  }
 
-    virtual const char* fieldShortName() const = 0;
+ private:
+  const char* field_name_;
+  const char* short_name_;
+  Statistics::FieldId_t field_;
 
-    virtual void ensureFieldRegistered() = 0;
 };
-
-template <class T, class Field, unsigned V1, unsigned V2, unsigned V3>
-class StatisticDoc : public StatisticElementInfo {
-private:
-    static const bool loaded;
-
-public:
-    StatisticDoc() : StatisticElementInfo() {
-        //initialize_allowedKeys();
-    }
-
-    void ensureFieldRegistered() override {
-      StatisticFieldType<Field>::registerField(fieldName(), fieldShortName());
-    }
-
-    Statistics::FieldId_t fieldId() const override {
-      return T::fieldId();
-    }
-
-    const char* fieldName() const override {
-      return T::fieldName();
-    }
-
-    const char* fieldShortName() const override {
-      return T::fieldShortName();
-    }
-
-    StatisticBase* create(BaseComponent* comp, const std::string& statName,
-                          const std::string& statId, Params& params) override {
-      return new T(comp, statName, statId, params);
-    }
-
-    static bool isLoaded() { return loaded; }
-    const std::string getLibrary() override { return T::ELI_getLibrary(); }
-    const std::string getName() override { return T::ELI_getName(); }
-    const std::string getDescription() override { return T::ELI_getDescription(); }
-    const std::vector<ElementInfoParam>& getValidParams() { return ELI_templatedGetParams<T>(); }
-    const std::string getInterface() override { return T::ELI_getInterface(); }
-    const std::vector<int>& getELICompiledVersion() override { return T::ELI_getELICompiledVersion(); }
-    const std::vector<int>& getVersion() override { static std::vector<int> var = {V1,V2,V3}; return var; }
-    const std::string getCompileFile() override { return T::ELI_getCompileFile(); }
-    const std::string getCompileDate() override { return T::ELI_getCompileDate(); }
-};
-template<class T, class Field, unsigned V1, unsigned V2, unsigned V3> const bool StatisticDoc<T,Field,V1,V2,V3>::loaded
-  = ElementLibraryDatabase::addStatistic(new StatisticDoc<T,Field,V1,V2,V3>());
-
 
 #define SST_ELI_REGISTER_STATISTIC_TEMPLATE(cls,lib,name,version,desc,interface)   \
-  static constexpr unsigned majorVersion() { \
-    return SST_ELI_getMajorNumberFromVersion(version); \
-  } \
-  static constexpr unsigned minorVersion() { \
-    return SST_ELI_getMinorNumberFromVersion(version); \
-  } \
-  static constexpr unsigned tertiaryVersion() { \
-    return SST_ELI_getTertiaryNumberFromVersion(version); \
-  } \
-  static const std::string ELI_getLibrary() { \
-    return lib; \
-  } \
-  static const std::string ELI_getName() { \
-    return name; \
-  } \
-  static const std::string ELI_getDescription() {  \
-    return desc; \
-  } \
-  static const std::string ELI_getInterface() {  \
-    return interface; \
-  } \
-  static const std::vector<int>& ELI_getVersion() { \
-      static std::vector<int> var = version ; \
-      return var; \
-  } \
+  SST_ELI_DEFAULT_INFO(lib,name,ELI_FORWARD_AS_ONE(version),desc) \
+  SST_ELI_INTERFACE_INFO(interface) \
   static bool isInstantiated(){ \
     return SST::Statistics::TemplateStatInstantiation<cls>::isInstantiated(); \
-  } \
-  SST_ELI_INSERT_COMPILE_INFO()
-
+  }
 
 #define SST_ELI_REGISTER_STATISTIC(cls,field,lib,name,version,desc,interface) \
   bool ELI_isLoaded() const { \
@@ -475,42 +430,43 @@ template<class T, class Field, unsigned V1, unsigned V2, unsigned V3> const bool
         SST::SST_ELI_getMinorNumberFromVersion(version), \
         SST::SST_ELI_getTertiaryNumberFromVersion(version)>::isLoaded(); \
   } \
-  static const std::string ELI_getLibrary() { \
-    return lib; \
-  } \
-  static const std::string ELI_getName() { \
-    return name; \
-  } \
-  static const std::string ELI_getDescription() {  \
-    return desc; \
-  } \
-  static const std::string ELI_getInterface() {  \
-    return interface; \
-  } \
-  static const std::vector<int>& ELI_getVersion() { \
-      static std::vector<int> var = version ; \
-      return var; \
-  } \
-  static const char* fieldName(){ return #field; } \
-  static const char* fieldShortName(){ return #field; } \
-  SST_ELI_INSERT_COMPILE_INFO()
+  SST_ELI_DEFAULT_INFO(lib,name,version,desc) \
+  SST_ELI_INTERFACE_INFO(interface) \
+  static const char* ELI_fieldName(){ return #field; } \
+  static const char* ELI_fieldShortName(){ return #field; }
 
 #define SST_ELI_INSTANTIATE_STATISTIC(cls,field,shortName) \
   struct cls##_##field##_##shortName : public cls<field> { \
+    template <class... InArgs> \
     cls##_##field##_##shortName(SST::BaseComponent* bc, const std::string& sn, \
-           const std::string& si, SST::Params& p) : cls<field>(bc,sn,si,p) {} \
+           const std::string& si, SST::Params& p, InArgs&&... ctorArgs) : \
+      cls<field>(bc,sn,si,p,std::forward<InArgs>(ctorArgs)...) {} \
     bool ELI_isLoaded() const { \
-        return SST::Statistics::StatisticDoc<cls##_##field##_##shortName,\
-          field, \
-          cls<field>::majorVersion(), \
-          cls<field>::minorVersion(), \
-          cls<field>::tertiaryVersion()>::isLoaded(); \
+      return ELI::FactoryInstance<SST::Statistics::Statistic<field>, \
+          cls##_##field##_##shortName, SST::BaseComponent*, \
+          const std::string&, const std::string&, SST::Params&>::isLoaded(); \
     } \
-    static const char* fieldName(){ return #field; } \
-    static const char* fieldShortName(){ return #shortName; } \
+    static const char* ELI_fieldName(){ return #field; } \
+    static const char* ELI_fieldShortName(){ return #shortName; } \
+    static FieldId_t ELI_registerField(const char* name, const char* shortName){ \
+      return StatisticFieldType<field>::registerField(name, shortName); \
+    } \
   }
 
 } //namespace Statistics
+
+namespace ELI {
+template <class T> using StatFactoryParent
+  = ELI::FactoryInfo<Statistics::Statistic<T>,ImplementsInterface,Statistics::ImplementsStatFields,void>;
+
+template <class T> struct FactoryInfo<Statistics::Statistic<T>> :
+ public StatFactoryParent<T>
+{
+  template <class... Args> FactoryInfo(Args&&... args)
+   : StatFactoryParent<T>(std::forward<Args>(args)...) {}
+};
+} //namespace ELI
+
 } //namespace SST
 
 #endif

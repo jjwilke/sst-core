@@ -235,14 +235,6 @@ StatisticOutput* StatisticProcessingEngine::createStatisticOutput(const ConfigSt
     return so;
 }
 
-StatisticBase*
-StatisticProcessingEngine::createStatistic(FieldId_t field, BaseComponent *comp, const std::string &type,
-                              const std::string &statName, const std::string &statSubId,
-                              Params &params)
-{
-  return Factory::getFactory()->CreateStatistic(field, type, comp, statName, statSubId, params);
-}
-
 void
 StatisticProcessingEngine::castError(const std::string& type, const std::string& statName,
                                      const std::string& fieldName)

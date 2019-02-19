@@ -18,13 +18,15 @@
 
 namespace SST {
 
-std::unique_ptr<std::map<std::string,LibraryInfo*>> SST::ElementLibraryDatabase::libraries;
-
 /**************************************************************************
   BaseElementInfo class functions
 **************************************************************************/
+namespace ELI {
+
+std::set<std::string> DataBase::loaded_{};
+
 std::string
-BaseElementInfo::getELIVersionString() {
+FactoryInfoBase::getELIVersionString() const {
     std::stringstream stream;
     bool first = true;
     for ( int item : getELICompiledVersion() ) {
@@ -35,23 +37,8 @@ BaseElementInfo::getELIVersionString() {
     return stream.str();    
 }
 
-/**************************************************************************
-  BaseParamsElementInfo class functions
-**************************************************************************/
-void
-BaseParamsElementInfo::initialize_allowedKeys()
-{
-    // Get the valid parameters into the right data structure for
-    // created the components.
-    // const std::vector<ElementInfoParam>& params = getValidParams();
-    const auto& params = getValidParams();
-    for ( auto item : params ) {
-        allowedKeys.insert(item.name);
-    }
-}
-
 std::string
-BaseParamsElementInfo::getParametersString() {
+ImplementsParamInfo::getParametersString() const {
     std::stringstream stream;
     stream << "      Parameters (" << getValidParams().size() << " total):"<<  std::endl;
     for ( auto item : getValidParams() ) {
@@ -64,37 +51,9 @@ BaseParamsElementInfo::getParametersString() {
     return stream.str();
 }
 
-
-/**************************************************************************
-  BaseComponentElementInfo class functions
-**************************************************************************/
-void
-BaseComponentElementInfo::initialize_portnames()
-{
-    // Need to create the vector of just the port names so we can
-    // set allowed ports
-    // const std::vector<ElementInfoPort2>& ports = getValidPorts();
-    const auto& ports = getValidPorts();
-    for ( auto item : ports ) {
-        portnames.push_back(item.name);
-    }
-}
-
-void
-BaseComponentElementInfo::initialize_statnames()
-{
-    // Need to create the vector of just the stat names
-    // const std::vector<ElementInfoStatistic>& stats = getValidStats();
-    const auto& stats = getValidStats();
-    for ( auto item : stats ) {
-        statnames.push_back(item.name);
-    }
-}
-
-
 std::string
-BaseComponentElementInfo::getPortsString() {
-    std::stringstream stream;    
+ImplementsPortsInfo::getPortsString() const {
+    std::stringstream stream;
     stream << "      Ports (" << getValidPorts().size() << " total):"<<  std::endl;
     for ( auto item : getValidPorts() ) {
         stream << "        " << item.name << ": "
@@ -105,8 +64,8 @@ BaseComponentElementInfo::getPortsString() {
 }
 
 std::string
-BaseComponentElementInfo::getSubComponentSlotString() {
-    std::stringstream stream;    
+ImplementsSubComponentInfo::getSubComponentSlotString() const {
+    std::stringstream stream;
     stream << "      SubComponentSlots (" << getSubComponentSlots().size() << " total):"<<  std::endl;
     for ( auto item : getSubComponentSlots() ) {
         stream << "        " << item.name << ": "
@@ -117,8 +76,8 @@ BaseComponentElementInfo::getSubComponentSlotString() {
 }
 
 std::string
-BaseComponentElementInfo::getStatisticsString() {
-    std::stringstream stream;    
+ImplementsStatsInfo::getStatisticsString() const {
+    std::stringstream stream;
     stream << "      Statistics (" << getValidStats().size() << " total):"<<  std::endl;
     for ( auto item : getValidStats() ) {
         stream << "        " << item.name << ": "
@@ -130,66 +89,25 @@ BaseComponentElementInfo::getStatisticsString() {
     return stream.str();
 }
 
-/**************************************************************************
-  ComponentElementInfo class functions
-**************************************************************************/
-std::string
-ComponentElementInfo::toString()
+void
+FactoryInfoBase::toString(std::ostream &os) const
 {
-    std::stringstream stream;
-    stream << "    " << getName() << ": " << getDescription() << std::endl;
-    stream << "    Using ELI version " << getELIVersionString() << std::endl;
-    stream << "    Compiled on: " << getCompileDate() << ", using file: " << getCompileFile() << std::endl;
-    stream << getParametersString();
-    stream << getStatisticsString();
-    stream << getPortsString();
-    stream << getSubComponentSlotString();
-    return stream.str();
+  os << "    " << getName() << ": " << getDescription() << std::endl;
+  os << "    Using ELI version " << getELIVersionString() << std::endl;
+  os << "    Compiled on: " << getCompileDate() << ", using file: "
+         << getCompileFile() << std::endl;
+}
+
 }
 
 
-/**************************************************************************
-  SubComponentElementInfo class functions
-**************************************************************************/
-std::string
-SubComponentElementInfo::toString()
-{
-    std::stringstream stream;
-    stream << "    " << getName() << ": " << getDescription() << std::endl;
-    stream << getParametersString();
-    stream << getStatisticsString();
-    stream << getPortsString();
-    stream << getSubComponentSlotString();
-    return stream.str();
-}
 
-
-/**************************************************************************
-  ModuleElementInfo class functions
-**************************************************************************/
-std::string
-ModuleElementInfo::toString() {
-    std::stringstream stream;
-    stream << "    " << getName() << ": " << getDescription() << std::endl;
-    stream << getParametersString();
-    return stream.str();
-}
-
-
-/**************************************************************************
-  PartitionerElementInfo class functions
-**************************************************************************/
-std::string
-PartitionerElementInfo::toString() {
-    std::stringstream stream;
-    stream << "    " << getName() << ": " << getDescription() << std::endl;
-    return stream.str();
-}
 
 
 /**************************************************************************
   LibraryInfo class functions
 **************************************************************************/
+#if 0
 std::string
 LibraryInfo::toString()
 {
@@ -229,7 +147,6 @@ LibraryInfo::toString()
     return stream.str();
 }
 
-
 /**************************************************************************
   LibraryInfo class functions
 **************************************************************************/
@@ -243,17 +160,6 @@ ElementLibraryDatabase::toString() {
     }
     return stream.str();
 }
-
-bool
-ElementLibraryDatabase::addStatistic(Statistics::StatisticElementInfo* info)
-{
-  info->ensureFieldRegistered();
-  LibraryInfo* library = getLibrary(info->getLibrary());
-  library->statistics[info->fieldId()][info->getName()] = info;
-  return true;
-}
-
-
-
+#endif
 
 } //namespace SST

@@ -27,8 +27,15 @@ namespace SST {
    the calls are proxied to the parent Component.
 */
 class SubComponent : public Module, public BaseComponent {
+ public:
+  ELI_RegisterCtor(SubComponent,Component*,SST::Params&)
 
-public:
+  ELI_RegisterBase(SubComponent,
+    ELI::ImplementsParamInfo,
+    ELI::ImplementsPortsInfo,
+    ELI::ImplementsStatsInfo,
+    ELI::ImplementsSubComponentInfo)
+
 	SubComponent(Component* parent) : BaseComponent(), parent(parent) {
         my_info = parent->currentlyLoadingSubComponent;
     };

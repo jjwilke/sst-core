@@ -15,6 +15,7 @@
 
 #include <vector>
 #include <string>
+#include <sst/core/elementinfo.h>
 
 namespace SST {
 
@@ -37,6 +38,8 @@ protected:
     SSTElementPythonModule() {}
     
 public:
+    ELI_RegisterBaseDefault(SSTElementPythonModule)
+
     virtual ~SSTElementPythonModule() {}
     
     SSTElementPythonModule(std::string library);

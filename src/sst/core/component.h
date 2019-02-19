@@ -31,6 +31,13 @@ class SubComponent;
  */
 class Component: public BaseComponent {
 public:
+  ELI_RegisterCtor(Component,ComponentId_t, SST::Params&)
+
+  ELI_RegisterBase(Component,
+    ELI::ImplementsParamInfo,
+    ELI::ImplementsPortsInfo,
+    ELI::ImplementsStatsInfo,
+    ELI::ImplementsSubComponentInfo)
 
     /** Constructor. Generally only called by the factory class.
         @param id Unique component ID

@@ -153,12 +153,6 @@ void StatisticBase::delayCollectionExpiredHandler()
     m_collectionDelayed = false;
 }
 
-std::string
-StatisticElementInfo::toString() {
-    std::stringstream stream;
-    stream << "    " << getName() << ": " << getDescription() << std::endl;
-    return stream.str();
-}
 
 } //namespace Statistics
 } //namespace SST

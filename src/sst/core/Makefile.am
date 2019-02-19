@@ -210,17 +210,19 @@ sst_core_sources = \
 	cputimer.cc \
 	iouse.cc
 
-bin_PROGRAMS = sst sst-info sst-config sst-register
-libexec_PROGRAMS = sstsim.x sstinfo.x
+bin_PROGRAMS = sst sst-config sst-register
+#sst-info
+libexec_PROGRAMS = sstsim.x
+#sstinfo.x
 
-sst_info_SOURCES = \
-	bootsstinfo.cc \
-	bootshared.cc \
-	bootshared.h \
-	env/envquery.h \
-	env/envconfig.h \
-	env/envquery.cc \
-	env/envconfig.cc
+#sst_info_SOURCES = \
+#	bootsstinfo.cc \
+#	bootshared.cc \
+#	bootshared.h \
+#	env/envquery.h \
+#	env/envconfig.h \
+#	env/envquery.cc \
+#	env/envconfig.cc
 
 sst_SOURCES = \
 	bootsst.cc \
@@ -250,10 +252,10 @@ sstsim_x_SOURCES = \
 	main.cc \
 	$(sst_core_sources)
 
-sstinfo_x_SOURCES = \
-	sstinfo.cc \
-	$(sst_core_sources) \
-	$(sst_xml_sources)
+#sstinfo_x_SOURCES = \
+#	sstinfo.cc \
+#	$(sst_core_sources) \
+#	$(sst_xml_sources)
 
 sstsim_x_LDADD = \
 	$(LIBLTDL) \
@@ -274,23 +276,23 @@ sstsim_x_LDFLAGS = \
 	-export-dynamic \
 	$(SST_LTLIBS_ELEMLIBS)
 
-sstinfo_x_LDADD = \
-	$(LIBLTDL) \
-	$(ZOLTAN_LIB) \
-	$(PARMETIS_LIB) \
-	$(BOOST_LIBS) \
-	$(MPILIBS) \
-	$(TCMALLOC_LIB) \
-	-lm
+#sstinfo_x_LDADD = \
+#	$(LIBLTDL) \
+#	$(ZOLTAN_LIB) \
+#	$(PARMETIS_LIB) \
+#	$(BOOST_LIBS) \
+#	$(MPILIBS) \
+#	$(TCMALLOC_LIB) \
+#	-lm
 
-sstinfo_x_LDFLAGS = \
-	$(PARMETIS_LDFLAGS) \
-	$(ZOLTAN_LDFLAGS) \
-	$(TCMALLOC_LDFLAGS) \
-	$(BOOST_LDFLAGS) \
-        $(PYTHON_LDFLAGS) \
-	-export-dynamic \
-	$(SST_LTLIBS_ELEMLIBS)
+#sstinfo_x_LDFLAGS = \
+#	$(PARMETIS_LDFLAGS) \
+#	$(ZOLTAN_LDFLAGS) \
+#	$(TCMALLOC_LDFLAGS) \
+#	$(BOOST_LDFLAGS) \
+#        $(PYTHON_LDFLAGS) \
+#	-export-dynamic \
+#	$(SST_LTLIBS_ELEMLIBS)
 
 include tinyxml/Makefile.inc
 include part/Makefile.inc
@@ -299,13 +301,13 @@ include impl/Makefile.inc
 
 if USE_LIBZ
 sstsim_x_LDADD += $(LIBZ_LIBS)
-sstinfo_x_LDADD += $(LIBZ_LIBS)
+#sstinfo_x_LDADD += $(LIBZ_LIBS)
 endif
 
 if USE_HDF5
 AM_CPPFLAGS += $(HDF5_CFLAGS)
 sstsim_x_SOURCES += statapi/statoutputhdf5.cc
-sstinfo_x_SOURCES += statapi/statoutputhdf5.cc
+#sstinfo_x_SOURCES += statapi/statoutputhdf5.cc
 sstsim_x_LDADD += $(HDF5_LDFLAGS) $(HDF5_LIBS)
-sstinfo_x_LDADD += $(HDF5_LDFLAGS) $(HDF5_LIBS)
+#sstinfo_x_LDADD += $(HDF5_LDFLAGS) $(HDF5_LIBS)
 endif

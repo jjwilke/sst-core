@@ -544,15 +544,3 @@ UnitAlgebra::~UnitAlgebra()
 {
 }
 
-int64_t
-UnitAlgebra::getRoundedValue() const
-{
-    // stringstream ss;
-    // int64_t ret;
-
-    // ss << round(value);
-    // ss >> ret;    
-    // return ret;
-    // return llround(value);
-    return value.toLong();
-}

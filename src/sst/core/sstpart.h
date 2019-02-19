@@ -15,6 +15,7 @@
 
 #include <sst/core/rankInfo.h>
 #include <sst/core/warnmacros.h>
+#include <sst/core/elementinfo.h>
 
 #include <map>
 
@@ -32,6 +33,10 @@ class SSTPartitioner
 {
 
 public:
+  ELI_RegisterBaseDefault(SSTPartitioner)
+
+  ELI_RegisterCtor(SSTPartitioner,RankInfo,RankInfo,int)
+
 
     SSTPartitioner() {}
     virtual ~SSTPartitioner() {}

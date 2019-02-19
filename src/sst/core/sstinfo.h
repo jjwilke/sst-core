@@ -19,6 +19,7 @@
 
 #include <sst/core/element.h>
 #include <sst/core/elementinfo.h>
+#include <sst/core/component.h>
 
 class TiXmlNode;
 
@@ -344,7 +345,7 @@ public:
         m_SubCompSlotArray = convertFromELI<SSTInfoElement_SubCompSlotInfo>(elc->subComponents);
     }
 
-    SSTInfoElement_ComponentInfo(ComponentElementInfo* elc) :
+    SSTInfoElement_ComponentInfo(Component::Info* elc) :
         SSTInfoElement_BaseInfo(*elc), m_category(elc->getCategory())
     {
         m_ParamArray = convertFromDB<SSTInfoElement_ParamInfo>(elc->getValidParams());

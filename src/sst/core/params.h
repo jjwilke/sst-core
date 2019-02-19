@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <utility>
 #include <sst/core/threadsafe.h>
+#include <sst/core/unitAlgebra.h>
 
 #include <sst/core/serialization/serializable.h>
 #include <sst/core/serialization/serializer.h>
@@ -229,7 +230,7 @@ public:
      * @param default_value - Default value to return if parameter isn't found
      */
     template <class T>
-    T find(const std::string &k, T default_value ) const {
+    T find(const std::string &k, T default_value) const {
         bool tmp;
         return find<T>(k, default_value, tmp);
     }
@@ -260,7 +261,7 @@ public:
     T find(const std::string &k) const {
         bool tmp;
         T default_value = T();
-        return find(k, default_value, tmp);
+        return find<T>(k, default_value, tmp);
     }
     
     /** Find a Parameter value in the set, and return its value as a type T.
@@ -273,8 +274,22 @@ public:
      */
     template <class T>
     T find(const std::string &k, bool &found) const {
-        T default_value = T();
-        return find(k, default_value, found);
+        return find<T>(k, T{}, found);
+    }
+
+    UnitAlgebra findUnits(const std::string& k) const {
+      bool found;
+      std::string val = find<std::string>(k, found);
+      if (!found){
+        std::string msg = "no unit algebra parameter found on key " + k;
+        throw std::invalid_argument(msg);
+      }
+      return UnitAlgebra(val);
+    }
+
+    UnitAlgebra findUnits(const std::string& k, const std::string& def) const {
+      std::string val = find<std::string>(k, def);
+      return UnitAlgebra(val);
     }
 
     /** Find a Parameter value in the set, and return its value as a
@@ -340,11 +355,9 @@ public:
         }
     }
 
-
-
     /** Add a key value pair into the param object.
      */
-    void insert(std::string key, std::string value, bool overwrite = true) {
+    void insert(const std::string& key, const std::string& value, bool overwrite = true) {
         if ( overwrite ) {
             data[getKey(key)] = value;
         }
@@ -373,9 +386,14 @@ public:
         Params ret;
         ret.enableVerify(false);
         for (const_iterator i = data.begin() ; i != data.end() ; ++i) {
-            std::string key = keyMapReverse[i->first].substr(0, prefix.length());
+            auto const& paramName = keyMapReverse[i->first];
+            std::string key = paramName.substr(0, prefix.length());
             if (key == prefix) {
-                ret.insert(keyMapReverse[i->first].substr(prefix.length()), i->second);
+              auto start = prefix.length();
+              if (paramName.at(start) == '.'){
+                start = start + 1; //implicitly skip periods
+              }
+              ret.insert(paramName.substr(start), i->second);
             }
         }
         ret.allowedKeys = allowedKeys;

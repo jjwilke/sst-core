@@ -21,6 +21,7 @@
 #include <sst/core/elemLoader.h>
 #include <sst/core/element.h>
 #include <sst/core/elementinfo.h>
+#include <sst/core/statapi/statbase.h>
 #include <sst/core/model/element_python.h>
 #include <sst/core/statapi/statfieldinfo.h>
 
@@ -60,37 +61,55 @@ public:
      * @param params - The params to pass to the component's constructor
      * @return Newly created component
      */
-    Component* CreateComponent(ComponentId_t id, std::string &componentname,
+    Component* CreateComponent(ComponentId_t id, const std::string& componentname,
                                Params& params);
 
     /** Ensure that an element library containing the required event is loaded
      * @param eventname - The fully qualified elementlibname.eventname type
      */
-    void RequireEvent(std::string eventname);
+    void RequireEvent(const std::string& eventname);
 
     /** Instantiate a new Module
      * @param type - Fully qualified elementlibname.modulename type
      * @param params - Parameters to pass to the Module's constructor
      */
-    Module* CreateModule(std::string type, Params& params);
+    Module* CreateModule(const std::string& type, Params& params);
 
     /** Instantiate a new Module
      * @param type - Fully qualified elementlibname.modulename type
      * @param comp - Component instance to pass to the Module's constructor
      * @param params - Parameters to pass to the Module's constructor
      */
-    Module* CreateModuleWithComponent(std::string type, Component* comp, Params& params);
+    Module* CreateModuleWithComponent(const std::string& type, Component* comp, Params& params);
 
     /** Instantiate a new Module
      * @param type - Fully qualified elementlibname.modulename type
      * @param comp - Component instance to pass to the SubComponent's constructor
      * @param params - Parameters to pass to the SubComponent's constructor
      */
-    SubComponent* CreateSubComponent(std::string type, Component* comp, Params& params);
+    SubComponent* CreateSubComponent(const std::string& type, Component* comp, Params& params);
 
-    Statistics::StatisticBase* CreateStatistic(Statistics::FieldId_t id, std::string type,
-                                               BaseComponent* comp, const std::string& statName,
-                                               const std::string& stat, Params& params);
+    template <class T, class... Args>
+    Statistics::Statistic<T>* CreateStatistic(std::string type,
+                                   BaseComponent* comp, const std::string& statName,
+                                   const std::string& stat, Params& params,
+                                   Args... args){
+      std::string elemlib, elem;
+      std::tie(elemlib, elem) = parseLoadName(type);
+      // ensure library is already loaded...
+      requireLibrary(elemlib);
+
+      auto* lib = ELI::ElementDatabase::getLibrary<Statistics::Statistic<T>, Args...>(elemlib);
+      if (lib){
+        auto* fact = lib->getFactory(elem);
+        if (fact){
+          return fact->create(comp, statName, stat, params, std::forward<Args>(args)...);
+        }
+      }
+      // If we make it to here, component not found
+      out.fatal(CALL_INFO, -1,"can't find requested statistic %s.\n ", type.c_str());
+      return NULL;
+    }
 
     /** Return partitioner function
      * @param name - Fully qualified elementlibname.partitioner type name
@@ -158,7 +177,7 @@ public:
     std::string GetComponentInfoStatisticUnits(const std::string& type, const std::string& statisticName);
 
 private:
-    Module* LoadCoreModule_StatisticOutputs(std::string& type, Params& params);
+    Module* LoadCoreModule_StatisticOutputs(const std::string& type, Params& params);
 
     friend int ::main(int argc, char **argv);
 
@@ -197,317 +216,6 @@ private:
 
 protected:
    Output &out;
-};
-
-
-
-/*******************************************************
-   Classes to provide backward compatibility with the
-   old ELI
-*******************************************************/
-
-/**************************************************************************
-  Class to support Components
-**************************************************************************/
-class ComponentDocOldELI : public ComponentElementInfo {
-
-private:
-    std::string library;
-    std::string name;
-    std::string description;
-
-    std::vector<ElementInfoParam> valid_params;
-    std::vector<ElementInfoStatistic> valid_stats;
-    std::vector<ElementInfoPort2> valid_ports;
-    std::vector<ElementInfoSubComponentSlot> subcomp_slots;
-
-    uint32_t category;
-
-    componentAllocate alloc;
-    
-public:
-
-    ComponentDocOldELI(const std::string& library, const ElementInfoComponent* component) :
-        ComponentElementInfo(),
-        library(library),
-        name(component->name),
-        description(component->description),
-        category(component->category),
-        alloc(component->alloc)
-        
-    {
-        const ElementInfoParam *p = component->params;
-        while ( NULL != p && NULL != p->name ) {
-            valid_params.emplace_back(*p);
-            p++;
-        }
-        
-        const ElementInfoPort *po = component->ports;
-        while ( NULL != po && NULL != po->name ) {
-            valid_ports.emplace_back(po);
-            po++;
-        }
-        
-        const ElementInfoStatistic *s = component->stats;
-        while ( NULL != s && NULL != s->name ) {
-            valid_stats.emplace_back(*s);
-            s++;
-        }
-        
-        const ElementInfoSubComponentSlot *ss = component->subComponents;
-        while ( NULL != ss && NULL != ss->name ) {
-            subcomp_slots.emplace_back(*ss);
-            ss++;
-        }
-        
-        initialize_allowedKeys();
-        initialize_portnames();
-        initialize_statnames();
-    }
-    
-    Component* create(ComponentId_t id, Params& params) {
-        return (*alloc)(id,params);
-    }
-
-    const std::string getLibrary() { return library; }
-    const std::string getName() { return name; }
-    const std::string getDescription() { return description; }
-    const std::vector<ElementInfoParam>& getValidParams() { return valid_params; }
-    const std::vector<ElementInfoStatistic>& getValidStats() { return valid_stats; }
-    const std::vector<ElementInfoPort2>& getValidPorts() { return valid_ports; }
-    const std::vector<ElementInfoSubComponentSlot>& getSubComponentSlots() { return subcomp_slots; }
-
-    uint32_t getCategory() { return category; }
-    const std::vector<int>& getELICompiledVersion() { static std::vector<int> vec = {-1, -1, -1};
-        return vec; }
-    const std::vector<int>& getVersion() { static std::vector<int> vec = {-1, -1, -1};
-        return vec; }
-    const std::string getCompileFile() { return "UNKNOWN"; }
-    const std::string getCompileDate() { return "UNKNOWN"; }
-};
-
-
-/**************************************************************************
-  Class to support SubComponents
-**************************************************************************/
-
-class SubComponentDocOldELI : public SubComponentElementInfo {
-private:
-
-    std::string library;
-    std::string name;
-    std::string description;
-
-    std::vector<ElementInfoParam> valid_params;
-    std::vector<ElementInfoStatistic> valid_stats;
-    std::vector<ElementInfoPort2> valid_ports;
-    std::vector<ElementInfoSubComponentSlot> subcomp_slots;
-
-    std::string interface;
-    subcomponentAllocate alloc;
-
-public:
-    
-    SubComponentDocOldELI(const std::string& library, const ElementInfoSubComponent* component) :
-        SubComponentElementInfo(),
-        library(library),
-        name(component->name),
-        description(component->description),
-        interface(component->provides),
-        alloc(component->alloc)
-
-    {
-
-        const ElementInfoParam *p = component->params;
-        while ( NULL != p && NULL != p->name ) {
-            valid_params.emplace_back(*p);
-            p++;
-        }
-        
-        const ElementInfoPort *po = component->ports;
-        while ( NULL != po && NULL != po->name ) {
-            valid_ports.emplace_back(po);
-            po++;
-        }
-        
-        const ElementInfoStatistic *s = component->stats;
-        while ( NULL != s && NULL != s->name ) {
-            valid_stats.emplace_back(*s);
-            s++;
-        }
-        
-        const ElementInfoSubComponentSlot *ss = component->subComponents;
-        while ( NULL != ss && NULL != ss->name ) {
-            subcomp_slots.emplace_back(*ss);
-            ss++;
-        }
-        
-        
-        initialize_allowedKeys();
-        initialize_portnames();
-        initialize_statnames();
-    }
-
-    SubComponent* create(Component* comp, Params& params) {
-        return (*alloc)(comp,params);
-    }
-
-    const std::string getLibrary() { return library; }
-    const std::string getName() { return name; }
-    const std::string getDescription() { return description; }
-    const std::vector<ElementInfoParam>& getValidParams() { return valid_params; }
-    const std::vector<ElementInfoStatistic>& getValidStats() { return valid_stats; }
-    const std::vector<ElementInfoPort2>& getValidPorts() { return valid_ports; }
-    const std::vector<ElementInfoSubComponentSlot>& getSubComponentSlots() { return subcomp_slots; }
-    const std::string getInterface() { return interface; }
-
-    const std::vector<int>& getELICompiledVersion() { static std::vector<int> vec = {-1, -1, -1};
-        return vec; }
-    const std::vector<int>& getVersion() { static std::vector<int> vec = {-1, -1, -1};
-        return vec; }
-    const std::string getCompileFile() { return "UNKNOWN"; }
-    const std::string getCompileDate() { return "UNKNOWN"; }
-
-};
-
-
-/**************************************************************************
-  Class to support Modules
-**************************************************************************/
-
-class ModuleDocOldELI : public ModuleElementInfo {
-private:
-
-    std::string library;
-    std::string name;
-    std::string description;
-
-    std::vector<ElementInfoParam> valid_params;
-
-    std::string interface;
-
-    moduleAllocate alloc;
-    moduleAllocateWithComponent allocWithComponent;
-    
-public:
-    
-    ModuleDocOldELI(const std::string& library, const ElementInfoModule* module) :
-        ModuleElementInfo(),
-        library(library),
-        name(module->name),
-        description(module->description),
-        alloc(module->alloc),
-        allocWithComponent(module->alloc_with_comp)
-    {
-
-        const ElementInfoParam *p = module->params;
-        while ( NULL != p && NULL != p->name ) {
-            valid_params.emplace_back(*p);
-            p++;
-        }
-        
-        initialize_allowedKeys();
-    }
-
-    Module* create(Component* comp, Params& params) {
-        return (*allocWithComponent)(comp,params);
-    }
-
-    Module* create(Params& params) {
-        return (*alloc)(params);
-    }
-
-    const std::string getLibrary() { return library; }
-    const std::string getName() { return name; }
-    const std::string getDescription() { return description; }
-    const std::vector<ElementInfoParam>& getValidParams() { return valid_params; }
-    const std::string getInterface() { return interface; }
-
-    const std::vector<int>& getELICompiledVersion() { static std::vector<int> vec = {-1, -1, -1};
-        return vec; }
-    const std::vector<int>& getVersion() { static std::vector<int> vec = {-1, -1, -1};
-        return vec; }
-    const std::string getCompileFile() { return "UNKNOWN"; }
-    const std::string getCompileDate() { return "UNKNOWN"; }
-
-};
-
-
-/**************************************************************************
-  Classes to support partitioners
-**************************************************************************/
-
-class PartitionerDocOldELI : public PartitionerElementInfo {
-private:
-
-    std::string library;
-    std::string name;
-    std::string description;
-
-    partitionFunction alloc;
-    
-public:
-
-    PartitionerDocOldELI(const std::string& library, const ElementInfoPartitioner* part) :
-        PartitionerElementInfo(),
-        library(library),
-        name(part->name),
-        description(part->description),
-        alloc(part->func)
-    {
-    }
-    
-    Partition::SSTPartitioner* create(RankInfo total_ranks, RankInfo my_rank, int verbosity) override {
-        return (*alloc)(total_ranks,my_rank,verbosity);
-    }
-    
-    const std::string getLibrary() override { return library; }
-    const std::string getName() override { return name; }
-    const std::string getDescription() override { return description; }
-
-    const std::vector<int>& getELICompiledVersion() override { static std::vector<int> vec = {-1, -1, -1};
-        return vec; }
-    const std::vector<int>& getVersion() override { static std::vector<int> vec = {-1, -1, -1};
-        return vec; }
-    const std::string getCompileFile() override { return "UNKNOWN"; }
-    const std::string getCompileDate() override { return "UNKNOWN"; }
-};
-
-/**************************************************************************
-  Class to support element python modules
-**************************************************************************/
-class PythonModuleDocOldELI : public PythonModuleElementInfo {
-private:
-
-    // Only need to create one of these
-    static SSTElementPythonModuleOldELI* instance;
-    
-    std::string library;
-    genPythonModuleFunction alloc;
-    
-public:
-
-    PythonModuleDocOldELI(const std::string& library, const genPythonModuleFunction func) :
-        PythonModuleElementInfo(),
-        library(library),
-        alloc(func)
-    {
-    }
-
-    SSTElementPythonModule* create() override {
-        // return new T(getLibrary());
-        if( instance == NULL ) instance = new SSTElementPythonModuleOldELI(alloc);
-        return instance; 
-    }
-    
-    const std::string getLibrary() override { return library; }
-
-    const std::vector<int>& getELICompiledVersion() override { static std::vector<int> vec = {-1, -1, -1};
-        return vec; }
-    const std::vector<int>& getVersion() override { static std::vector<int> vec = {-1, -1, -1};
-        return vec; }
-    const std::string getCompileFile() override { return "UNKNOWN"; }
-    const std::string getCompileDate() override { return "UNKNOWN"; }
 };
 
 

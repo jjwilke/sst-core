@@ -28,13 +28,15 @@ namespace Statistics {
 class StatisticOutputConsole : public StatisticOutput
 {
 public:
-    SST_ELI_REGISTER_MODULE(
+    SST_ELI_REGISTER_CTOR(
+        StatisticOutput,
         StatisticOutputConsole,
         "sst",
         "statOutputConsole",
         SST_ELI_ELEMENT_VERSION(1,0,0),
         "Output directly to console screen",
-        "SST::StatisticOutput")
+        SST::Params& //takes ctor
+     )
 
 
     /** Construct a StatOutputConsole

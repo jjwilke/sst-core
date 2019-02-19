@@ -21,6 +21,7 @@
 #include <sst/core/clock.h>
 #include <sst/core/oneshot.h>
 #include <sst/core/threadsafe.h>
+#include <sst/core/factory.h>
 
 /* Forward declare for Friendship */
 extern int main(int argc, char **argv);
@@ -76,23 +77,15 @@ public:
       return new T(comp, statName, statSubId, params);
     }
 
-    template<typename T>
+    template<typename T, class... Args>
     Statistic<T>* createStatistic(BaseComponent *comp, const std::string &type,
                                   const std::string &statName, const std::string &statSubId,
-                                  Params &params)
+                                  Params &params, Args... args)
     {
-      StatisticBase* base = createStatistic(Statistic<T>::fieldId(), comp, type, statName,
-                                            statSubId, params);
-      Statistic<T>* casted = dynamic_cast<Statistic<T>*>(base);
-      if (!casted){
-        castError(type, statName, StatisticFieldType<T>::getFieldName());
-      }
-      return casted;
-    }
 
-    StatisticBase* createStatistic(FieldId_t field, BaseComponent *comp, const std::string &type,
-                                  const std::string &statName, const std::string &statSubId,
-                                  Params &params);
+      return Factory::getFactory()->CreateStatistic<T,Args...>(
+            type, comp, statName, statSubId, params, std::forward<Args>(args)...);
+    }
 
     bool registerStatisticWithEngine(StatisticBase* stat, FieldId_t id)
     {

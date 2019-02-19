@@ -31,13 +31,15 @@ namespace Statistics {
 class StatisticOutputTxt : public StatisticOutput
 {
 public:    
-  SST_ELI_REGISTER_MODULE(
+  SST_ELI_REGISTER_CTOR(
+      StatisticOutput,
       StatisticOutputTxt,
       "sst",
       "statOutputTxt",
       SST_ELI_ELEMENT_VERSION(1,0,0),
-      "Output to a text file",
-      "SST::StatisticOutput")
+      "Output directly to console screen",
+      SST::Params& //takes ctor
+   )
 
     /** Construct a StatOutputTxt
      * @param outputParameters - Parameters used for this Statistic Output

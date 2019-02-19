@@ -13,6 +13,8 @@
 #ifndef SST_CORE_MODULE_H
 #define SST_CORE_MODULE_H
 
+#include <sst/core/elementinfo.h>
+
 namespace SST {
   /**
      Module is a tag class used with the loadModule function.
@@ -20,8 +22,18 @@ namespace SST {
     class Module {
 
     public:
-	Module() {}
-	virtual ~Module() {}
+      ELI_RegisterBase(Module,
+         ELI::ImplementsParamInfo,
+         ELI::ImplementsInterface)
+
+      Module() {}
+      virtual ~Module() {}
+
+      //by default, no params to return
+      static const std::vector<SST::ElementInfoParam>& ELI_getParams() {
+          static std::vector<SST::ElementInfoParam> var{};
+          return var;
+      }
 
     };
 } //namespace SST

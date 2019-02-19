@@ -54,7 +54,7 @@ class StatisticFieldTypeBase {
 template <class T>
 class StatisticFieldType : public StatisticFieldTypeBase {
  public:
-  static void registerField(const char* name, const char* shortName){
+  static FieldId_t registerField(const char* name, const char* shortName){
     if (fieldEnum_ == 0){
       fieldEnum_ = allocateEnum<FieldEnum,FieldId_t>();
     }
@@ -67,6 +67,7 @@ class StatisticFieldType : public StatisticFieldTypeBase {
       shortName_ = shortName;
       (*fields_)[fieldEnum_] = new StatisticFieldType;
     }
+    return fieldEnum_;
   }
 
   static const char* getFieldName(){

@@ -18,7 +18,7 @@ namespace SST {
 bool
 SubComponent::doesComponentInfoStatisticExist(const std::string &statisticName) const
 {
-    return Factory::getFactory()->DoesSubComponentInfoStatisticNameExist(my_info->getType(), statisticName);
+    return ::SST::Factory::getFactory()->DoesSubComponentInfoStatisticNameExist(my_info->getType(), statisticName);
 }
 
 } // namespace SST

@@ -48,10 +48,13 @@ class StatisticGroup;
 class StatisticOutput : public Module
 {
 public:
-    typedef StatisticFieldInfo::fieldType_t   fieldType_t;
-    typedef StatisticFieldInfo::fieldHandle_t fieldHandle_t;
-    typedef std::vector<StatisticFieldInfo*>  FieldInfoArray_t;
-    typedef std::unordered_map<std::string, fieldHandle_t>  FieldNameMap_t;
+  ELI_RegisterBaseDefault(StatisticOutput)
+  ELI_RegisterCtor(StatisticOutput,SST::Params&)
+
+    using fieldType_t = StatisticFieldInfo::fieldType_t;
+    using fieldHandle_t = StatisticFieldInfo::fieldHandle_t;
+    using FieldInfoArray_t = std::vector<StatisticFieldInfo*>;
+    using FieldNameMap_t = std::unordered_map<std::string, fieldHandle_t> ;
 
 public:
     /** Construct a base StatisticOutput

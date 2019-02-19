@@ -30,7 +30,7 @@
 namespace SST {
 
 // typedef decimal_fixedpoint<3,3> sst_dec_float;
-typedef decimal_fixedpoint<3,3> sst_big_num;
+using sst_big_num = decimal_fixedpoint<3,3>;
 
 /**
  * Helper class internal to UnitAlgebra.
@@ -192,14 +192,32 @@ public:
     /** Apply a reciprocal operation to the object */
     UnitAlgebra& invert();
 
+    UnitAlgebra inverse() const {
+      UnitAlgebra copy = *this;
+      copy.invert();
+      return copy;
+    }
+
     /** Returns true if the units in the parameter string are found
      * in this object.
      */
     bool hasUnits(std::string u) const;
+
     /** Return the raw value */
     sst_big_num getValue() const {return value;}
+
     /** Return the rounded value as a 64bit integer */
-    int64_t getRoundedValue() const;
+    int64_t getRoundedValue() const {
+      return value.toLong();
+    }
+
+    double toDouble() const {
+      return value.toDouble();
+    }
+
+    long toLong() const {
+      return value.toLong();
+    }
 
     void serialize_order(SST::Core::Serialization::serializer &ser) override {
         // Do the unit
