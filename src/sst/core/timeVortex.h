@@ -24,8 +24,8 @@ class Output;
  */
 class TimeVortex : public ActivityQueue, public Module {
 public:
-  ELI_RegisterBaseDefault(TimeVortex)
-  ELI_RegisterCtor(TimeVortex,SST::Params&)
+  SST_ELI_REGISTER_BASE_DEFAULT(TimeVortex)
+  SST_ELI_REGISTER_CTOR(SST::Params&)
 
 	TimeVortex() {
         max_depth = MAX_SIMTIME_T;

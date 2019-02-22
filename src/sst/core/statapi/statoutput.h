@@ -48,8 +48,8 @@ class StatisticGroup;
 class StatisticOutput : public Module
 {
 public:
-  ELI_RegisterBaseDefault(StatisticOutput)
-  ELI_RegisterCtor(StatisticOutput,SST::Params&)
+  SST_ELI_REGISTER_BASE_DEFAULT(StatisticOutput)
+  SST_ELI_REGISTER_CTOR(SST::Params&)
 
     using fieldType_t = StatisticFieldInfo::fieldType_t;
     using fieldHandle_t = StatisticFieldInfo::fieldHandle_t;

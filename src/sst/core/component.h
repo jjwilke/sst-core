@@ -25,24 +25,32 @@ using namespace SST::Statistics;
 namespace SST {
 class SubComponent;
 
+#define SST_ELI_REGISTER_COMPONENT(cls,lib,name,version,desc,cat)   \
+    SST_ELI_REGISTER_DERIVED(SST::Component,cls,lib,name,ELI_FORWARD_AS_ONE(version),desc) \
+    SST_ELI_CATEGORY_INFO(cat)
+
+
 /**
  * Main component object for the simulation.
  *  All models inherit from this.
  */
 class Component: public BaseComponent {
 public:
-  ELI_RegisterCtor(Component,ComponentId_t, SST::Params&)
-
-  ELI_RegisterBase(Component,
+  SST_ELI_REGISTER_BASE(Component,
     ELI::ImplementsParamInfo,
     ELI::ImplementsPortsInfo,
     ELI::ImplementsStatsInfo,
+    ELI::ImplementsCategoryInfo,
     ELI::ImplementsSubComponentInfo)
+  SST_ELI_REGISTER_CTOR(ComponentId_t, SST::Params&)
 
     /** Constructor. Generally only called by the factory class.
         @param id Unique component ID
     */
-    Component( ComponentId_t id );
+
+
+
+    Component(ComponentId_t id);
     virtual ~Component();
 
 

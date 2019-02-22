@@ -38,11 +38,15 @@ protected:
     SSTElementPythonModule() {}
     
 public:
-    ELI_RegisterBaseDefault(SSTElementPythonModule)
+    SST_ELI_REGISTER_BASE_DEFAULT(SSTElementPythonModule)
+    SST_ELI_REGISTER_CTORS(
+      ELI_CTOR(const std::string&),
+      ELI_DEFAULT_CTOR()
+    )
 
     virtual ~SSTElementPythonModule() {}
     
-    SSTElementPythonModule(std::string library);
+    SSTElementPythonModule(const std::string& library);
 
     void addPrimaryModule(char* file);
     void addSubModule(std::string name, char* file);

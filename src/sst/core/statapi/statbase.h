@@ -317,11 +317,13 @@ struct StatisticCollector<std::tuple<Args...>,false> {
 	@tparam T A template for the basic numerical data stored by this Statistic
 */
 
-template <typename T, class... CtorArgs>
+template <typename T, class... ExtraCtorArgs>
 class Statistic : public StatisticBase, public StatisticCollector<T>
 {
  public:
-  ELI_RegisterBase(Statistic,ELI::ImplementsInterface)
+  SST_ELI_REGISTER_BASE(Statistic,ELI::ImplementsInterface)
+  SST_ELI_REGISTER_CTOR(const std::string&, const std::string&, SST::Params&, ExtraCtorArgs...)
+
     using Datum = T;
     using StatisticCollector<T>::addData_impl;
     // The main method to add data to the statistic 
@@ -378,12 +380,6 @@ struct MultiCtor {
 template <class... Args>
 using MultiStatistic = Statistic<std::tuple<Args...>>;
 
-template <class T> struct TemplateStatInstantiation {
-  static bool isInstantiated(){ return instantiated; }
-  static bool instantiated;
-};
-template <class T> bool TemplateStatInstantiation<T>::instantiated = true;
-
 
 struct ImplementsStatFields {
  public:
@@ -418,17 +414,13 @@ struct ImplementsStatFields {
 
 #define SST_ELI_REGISTER_STATISTIC_TEMPLATE(cls,lib,name,version,desc,interface)   \
   SST_ELI_DEFAULT_INFO(lib,name,ELI_FORWARD_AS_ONE(version),desc) \
-  SST_ELI_INTERFACE_INFO(interface) \
-  static bool isInstantiated(){ \
-    return SST::Statistics::TemplateStatInstantiation<cls>::isInstantiated(); \
-  }
+  SST_ELI_INTERFACE_INFO(interface)
 
 #define SST_ELI_REGISTER_STATISTIC(cls,field,lib,name,version,desc,interface) \
   bool ELI_isLoaded() const { \
-      return SST::Statistics::StatisticDoc<cls,field, \
-        SST::SST_ELI_getMajorNumberFromVersion(version), \
-        SST::SST_ELI_getMinorNumberFromVersion(version), \
-        SST::SST_ELI_getTertiaryNumberFromVersion(version)>::isLoaded(); \
+   return SST::ELI::Instantiate< \
+      SST::Statistics::Statistic<field>, \
+      cls##_##field##_##shortName>::isLoaded(); \
   } \
   SST_ELI_DEFAULT_INFO(lib,name,version,desc) \
   SST_ELI_INTERFACE_INFO(interface) \
@@ -442,9 +434,9 @@ struct ImplementsStatFields {
            const std::string& si, SST::Params& p, InArgs&&... ctorArgs) : \
       cls<field>(bc,sn,si,p,std::forward<InArgs>(ctorArgs)...) {} \
     bool ELI_isLoaded() const { \
-      return ELI::FactoryInstance<SST::Statistics::Statistic<field>, \
-          cls##_##field##_##shortName, SST::BaseComponent*, \
-          const std::string&, const std::string&, SST::Params&>::isLoaded(); \
+     return SST::ELI::Instantiate< \
+        SST::Statistics::Statistic<field>, \
+        cls##_##field##_##shortName>::isLoaded(); \
     } \
     static const char* ELI_fieldName(){ return #field; } \
     static const char* ELI_fieldShortName(){ return #shortName; } \
@@ -455,6 +447,7 @@ struct ImplementsStatFields {
 
 } //namespace Statistics
 
+/**
 namespace ELI {
 template <class T> using StatFactoryParent
   = ELI::FactoryInfo<Statistics::Statistic<T>,ImplementsInterface,Statistics::ImplementsStatFields,void>;
@@ -466,6 +459,7 @@ template <class T> struct FactoryInfo<Statistics::Statistic<T>> :
    : StatFactoryParent<T>(std::forward<Args>(args)...) {}
 };
 } //namespace ELI
+*/
 
 } //namespace SST
 

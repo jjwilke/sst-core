@@ -26,16 +26,14 @@ namespace Statistics {
 */
 class StatisticOutputJSON : public StatisticOutput
 {
-public:    
-
-  SST_ELI_REGISTER_CTOR(
+ public:
+  SST_ELI_REGISTER_DERIVED(
       StatisticOutput,
       StatisticOutputJSON,
       "sst",
       "statOutputJSON",
       SST_ELI_ELEMENT_VERSION(1,0,0),
-      "Output to a JSON file",
-      SST::Params&);
+      "Output to a JSON file")
 
   /** Construct a StatOutputJSON
      * @param outputParameters - Parameters used for this Statistic Output

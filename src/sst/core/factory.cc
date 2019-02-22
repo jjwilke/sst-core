@@ -123,16 +123,12 @@ bool Factory::isPortNameValid(const std::string &type, const std::string port_na
 
     const std::vector<std::string> *portNames = NULL;
 
-    auto* compLib = Component::getLibrary(elemlib);
-    if (compLib){
-      auto* compFact = compLib->getFactory(elem);
-      if (compFact) portNames = &compFact->getPortnames();
+    auto* compInfo = Component::getInfo(elemlib,elem);
+    if (compInfo) {
+      portNames = &compInfo->getPortnames();
     } else {
-      auto* subcompLib = ELI::ElementDatabase::getLibrary<SubComponent>(elemlib);
-      if (subcompLib){
-        auto* subcompFact = subcompLib->getFactory(elem);
-        if (subcompFact) portNames = &subcompFact->getPortnames();
-      }
+      auto* subcompInfo = SubComponent::getInfo(elemlib,elem);
+      if (subcompInfo) portNames = &subcompInfo->getPortnames();
     }
 
     std::string tmp = elemlib + "." + elem;
@@ -163,21 +159,19 @@ Factory::CreateComponent(ComponentId_t id,
     requireLibrary(elemlib);
 
     std::lock_guard<std::recursive_mutex> lock(factoryMutex);
-    auto* lib = Component::getLibrary(elemlib);
-    if (lib) {
-      auto* factory = lib->getFactory(elem);
-      if (factory){
-        LinkMap *lm = Simulation::getSimulation()->getComponentLinkMap(id);
-        lm->setAllowedPorts(&(factory->getPortnames()));
+    auto* compInfo = Component::getInfo(elemlib,elem);
+    if (compInfo) {
+      LinkMap *lm = Simulation::getSimulation()->getComponentLinkMap(id);
+      lm->setAllowedPorts(&(compInfo->getPortnames()));
 
-        loadingComponentType = type;
-        params.pushAllowedKeys(factory->getParamNames());
-        Component *ret = factory->create(id, params);
-        params.popAllowedKeys();
-        loadingComponentType = "";
-        return ret;
-      }
+      loadingComponentType = type;
+      params.pushAllowedKeys(compInfo->getParamNames());
+      Component *ret = Component::create(elemlib,elem,id,params);
+      params.popAllowedKeys();
+      loadingComponentType = "";
+      return ret;
     }
+
     // If we make it to here, component not found
     out.fatal(CALL_INFO, -1,"can't find requested component %s.\n ", type.c_str());
     return NULL;
@@ -214,22 +208,22 @@ Factory::DoesSubComponentSlotExist(const std::string& type, const std::string& s
 
     std::lock_guard<std::recursive_mutex> lock(factoryMutex);
 
-    auto* compLib = ELI::ElementDatabase::getLibrary<Component>(elemlib);
+    auto* compLib = ELI::InfoDatabase::getLibrary<Component>(elemlib);
     if (compLib){
-      auto* fact = compLib->getFactory(elem);
-      if (fact){
-        for (auto& item : fact->getSubComponentSlots()){
+      auto* info = compLib->getInfo(elem);
+      if (info){
+        for (auto& item : info->getSubComponentSlots()){
           if (item.name == slotName) return true;
         }
       }
       return false;
     }
 
-    auto* subLib = ELI::ElementDatabase::getLibrary<SubComponent>(elemlib);
+    auto* subLib = ELI::InfoDatabase::getLibrary<SubComponent>(elemlib);
     if (subLib){
-      auto* fact = subLib->getFactory(elem);
-      if (fact){
-        for (auto& item : fact->getSubComponentSlots()){
+      auto* info = subLib->getInfo(elem);
+      if (info){
+        for (auto& item : info->getSubComponentSlots()){
           if (item.name == slotName) return true;
         }
       }
@@ -257,11 +251,11 @@ Factory::DoesComponentInfoStatisticNameExist(const std::string& type, const std:
 
     std::lock_guard<std::recursive_mutex> lock(factoryMutex);
 
-    auto* lib = ELI::ElementDatabase::getLibrary<Component>(elemlib);
+    auto* lib = ELI::InfoDatabase::getLibrary<Component>(elemlib);
     if (lib){
-      auto* fact = lib->getFactory(elem);
-      if (fact){
-        for (auto& item : fact->getStatnames()) {
+      auto* info = lib->getInfo(elem);
+      if (info){
+        for (auto& item : info->getStatnames()) {
             if (statisticName == item) {
                 return true;
             }
@@ -291,11 +285,11 @@ Factory::DoesSubComponentInfoStatisticNameExist(const std::string& type, const s
 
     std::lock_guard<std::recursive_mutex> lock(factoryMutex);
 
-    auto* lib = ELI::ElementDatabase::getLibrary<SubComponent>(elemlib);
+    auto* lib = ELI::InfoDatabase::getLibrary<SubComponent>(elemlib);
     if (lib){
-      auto* fact = lib->getFactory(elem);
-      if (fact){
-        for ( auto& item : fact->getStatnames() ) {
+      auto* info = lib->getInfo(elem);
+      if (info){
+        for ( auto& item : info->getStatnames() ) {
             if ( statisticName == item ) {
                 return true;
             }
@@ -325,11 +319,11 @@ Factory::GetComponentInfoStatisticEnableLevel(const std::string& type, const std
 
     std::lock_guard<std::recursive_mutex> lock(factoryMutex);
 
-    auto* compLib = ELI::ElementDatabase::getLibrary<Component>(elemlib);
+    auto* compLib = ELI::InfoDatabase::getLibrary<Component>(elemlib);
     if (compLib){
-      auto* fact = compLib->getFactory(elem);
-      if (fact){
-        for ( auto& item : fact->getValidStats() ) {
+      auto* info = compLib->getInfo(elem);
+      if (info){
+        for ( auto& item : info->getValidStats() ) {
             if ( statisticName == item.name ) {
                 return item.enableLevel;
             }
@@ -338,11 +332,11 @@ Factory::GetComponentInfoStatisticEnableLevel(const std::string& type, const std
       return 0;
     }
 
-    auto* subLib = ELI::ElementDatabase::getLibrary<SubComponent>(elemlib);
+    auto* subLib = ELI::InfoDatabase::getLibrary<SubComponent>(elemlib);
     if (subLib){
-      auto* fact = subLib->getFactory(elem);
-      if (fact){
-        for ( auto& item : fact->getValidStats() ) {
+      auto* info = subLib->getInfo(elem);
+      if (info){
+        for ( auto& item : info->getValidStats() ) {
             if ( statisticName == item.name ) {
                 return item.enableLevel;
             }
@@ -372,11 +366,11 @@ Factory::GetComponentInfoStatisticUnits(const std::string& type, const std::stri
         findLibrary(elemlib);
     }
 
-    auto* compLib = ELI::ElementDatabase::getLibrary<Component>(elemlib);
+    auto* compLib = ELI::InfoDatabase::getLibrary<Component>(elemlib);
     if (compLib){
-      auto* fact = compLib->getFactory(elem);
-      if (fact){
-        for ( auto& item : fact->getValidStats() ) {
+      auto* info = compLib->getInfo(elem);
+      if (info){
+        for ( auto& item : info->getValidStats() ) {
             if ( statisticName == item.name ) {
                 return item.units;
             }
@@ -385,11 +379,11 @@ Factory::GetComponentInfoStatisticUnits(const std::string& type, const std::stri
       return 0;
     }
 
-    auto* subLib = ELI::ElementDatabase::getLibrary<SubComponent>(elemlib);
+    auto* subLib = ELI::InfoDatabase::getLibrary<SubComponent>(elemlib);
     if (subLib){
-      auto* fact = subLib->getFactory(elem);
-      if (fact){
-        for ( auto& item : fact->getValidStats() ) {
+      auto* info = subLib->getInfo(elem);
+      if (info){
+        for ( auto& item : info->getValidStats() ) {
             if ( statisticName == item.name ) {
                 return item.units;
             }
@@ -417,12 +411,12 @@ Factory::CreateModule(const std::string& type, Params& params)
     requireLibrary(elemlib);
     std::lock_guard<std::recursive_mutex> lock(factoryMutex);
 
-    auto* lib = Module::Library<SST::Params&>::get(elemlib);
+    auto* lib = ELI::InfoDatabase::getLibrary<Module>(elemlib);
     if (lib){
-      auto* fact = lib->getFactory(elem);
-      if (fact){
-        params.pushAllowedKeys(fact->getParamNames());
-        Module *ret = fact->create(params);
+      auto* info = lib->getInfo(elem);
+      if (info){
+        params.pushAllowedKeys(info->getParamNames());
+        Module *ret = Module::create(elemlib,elem,params);
         params.popAllowedKeys();
         return ret;
       }
@@ -451,12 +445,12 @@ Factory::CreateModuleWithComponent(const std::string& type, Component* comp, Par
 
     std::lock_guard<std::recursive_mutex> lock(factoryMutex);
 
-    auto* lib = ELI::ElementDatabase::getLibrary<Module,Component*,SST::Params&>(elemlib);
+    auto* lib = ELI::InfoDatabase::getLibrary<Module>(elemlib);
     if (lib){
-      auto* fact = lib->getFactory(elem);
-      if (fact){
-        params.pushAllowedKeys(fact->getParamNames());
-        Module *ret = fact->create(comp,params);
+      auto* info = lib->getInfo(elem);
+      if (info){
+        params.pushAllowedKeys(info->getParamNames());
+        Module *ret = Module::create(elemlib,elem,comp,params);
         params.popAllowedKeys();
         return ret;
       }
@@ -482,12 +476,12 @@ Factory::CreateSubComponent(const std::string& type, Component* comp, Params& pa
     // Check to see if library is loaded into new
     // ElementLibraryDatabase
 
-    auto* lib = SubComponent::getLibrary(elemlib);
+    auto* lib = ELI::InfoDatabase::getLibrary<SubComponent>(elemlib);
     if (lib){
-      auto* fact = lib->getFactory(elem);
-      if (fact){
-        params.pushAllowedKeys(fact->getParamNames());
-        SubComponent* ret = fact->create(comp, params);
+      auto* info = lib->getInfo(elem);
+      if (info){
+        params.pushAllowedKeys(info->getParamNames());
+        SubComponent* ret = SubComponent::create(elemlib, elem, comp, params);
         params.popAllowedKeys();
         return ret;
       }
@@ -530,11 +524,11 @@ Factory::CreatePartitioner(std::string name, RankInfo total_ranks, RankInfo my_r
     // ensure library is already loaded...
     requireLibrary(elemlib);
 
-    auto* lib = Partition::SSTPartitioner::getLibrary(elemlib);
+    auto* lib = ELI::InfoDatabase::getLibrary<Partition::SSTPartitioner>(elemlib);
     if (lib){
-      auto* fact = lib->getFactory(elem);
-      if (fact){
-        return fact->create(total_ranks, my_rank, verbosity);
+      auto* info = lib->getInfo(elem);
+      if (info){
+        return Partition::SSTPartitioner::create(elemlib, elem, total_ranks, my_rank, verbosity);
       }
     }
 
@@ -574,11 +568,11 @@ Factory::getPythonModule(std::string name)
     std::string elemlib, elem;
     std::tie(elemlib, elem) = parseLoadName(name);
 
-    auto* lib = ELI::ElementDatabase::getLibrary<SSTElementPythonModule>(elemlib);
+    auto* lib = ELI::InfoDatabase::getLibrary<SSTElementPythonModule>(elemlib);
     if (lib) {
-      auto* fact = lib->getFactory(elem);
-      if (fact){
-        return fact->create();
+      auto* info = lib->getInfo(elem);
+      if (info){
+        return SSTElementPythonModule::create(elemlib,elem);
       }
     }
 
@@ -642,30 +636,32 @@ Factory::findLibrary(std::string elemlib, bool showErrors)
 
     if (NULL != eli->components) { //use NULL I guess for C?
       const auto *eic = eli->components;
-      auto* lib = Component::getLibrary(elemlib);
+      auto* infolib = Component::getInfoLibrary(elemlib);
+      auto* factlib = Component::getFactoryLibrary(elemlib);
       while (NULL != eic->name) {
-        auto* fact = new Component::Factory<OldELITag>(OldELITag{elemlib}, eic->alloc, eic);
-        lib->addFactory(fact);
-        eic++;
+        factlib->addFactory(eic->name, new Component::DerivedFactory<OldELITag>(eic->alloc));
+        infolib->addInfo(new Component::InfoInstance<OldELITag>(elemlib,eic));
       }
     }
 
     if (NULL != eli->subcomponents) { //use NULL I guess for C?
       const auto *eis = eli->subcomponents;
-      auto* lib = SubComponent::getLibrary(elemlib);
+      auto* infolib = SubComponent::getInfoLibrary(elemlib);
+      auto* factlib = SubComponent::getFactoryLibrary(elemlib);
       while (NULL != eis->name) {
-        auto* fact = new SubComponent::Factory<OldELITag>(OldELITag{elemlib}, eis->alloc, eis);
-        lib->addFactory(fact);
+        factlib->addFactory(eis->name, new SubComponent::DerivedFactory<OldELITag>(eis->alloc));
+        infolib->addInfo(new SubComponent::InfoInstance<OldELITag>(elemlib, eis));
         eis++;
       }
     }
 
     if (NULL != eli->partitioners) { //use NULL I guess for C?
       const auto *eis = eli->partitioners;
-      auto* lib = Partition::SSTPartitioner::getLibrary(elemlib);
+      auto* infolib = Partition::SSTPartitioner::getInfoLibrary(elemlib);
+      auto* factlib = Partition::SSTPartitioner::getFactoryLibrary(elemlib);
       while (NULL != eis->name) {
-        auto* fact = new Partition::SSTPartitioner::Factory<OldELITag>(OldELITag{elemlib}, eis->func, eis);
-        lib->addFactory(fact);
+        factlib->addFactory(eis->name, new Partition::SSTPartitioner::DerivedFactory<OldELITag>(eis->func));
+        infolib->addInfo(new Partition::SSTPartitioner::InfoInstance<OldELITag>(elemlib, eis));
         eis++;
       }
     }
@@ -673,14 +669,18 @@ Factory::findLibrary(std::string elemlib, bool showErrors)
 
     if (NULL != eli->modules) {
       const ElementInfoModule *eim = eli->modules;
+      auto* infolib = Module::getInfoLibrary(elemlib);
+      auto* withlib = Module::getFactoryLibrary<Component*,SST::Params&>(elemlib);
+      auto* wolib = Module::getFactoryLibrary<SST::Params&>(elemlib);
       while (NULL != eim->name) {
-        auto* withComp = new Module::Instance<OldELITag,Component*,SST::Params&>(
-                                OldELITag{elemlib},  eim->alloc_with_comp, eim);
-        Module::Library<Component*,SST::Params&>::get(elemlib)->addFactory(withComp);
+        auto* info = new Module::InfoInstance<OldELITag>(elemlib, eim);
+        infolib->addInfo(info);
 
-        auto* withoutComp = new Module::Instance<OldELITag,SST::Params&>(
-                                OldELITag{elemlib}, eim->alloc, eim);
-        Module::Library<SST::Params&>::get(elemlib)->addFactory(withoutComp);
+        auto* withComp = new Module::DerivedFactory<OldELITag,Component*,SST::Params&>(eim->alloc_with_comp);
+        withlib->addFactory(eim->name, withComp);
+
+        auto* withoutComp = new Module::DerivedFactory<OldELITag,SST::Params&>(eim->alloc);
+        wolib->addFactory(eim->name, withoutComp);
         eim++;
       }
     }

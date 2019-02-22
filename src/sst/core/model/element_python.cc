@@ -22,7 +22,7 @@
 
 namespace SST {
 
-SSTElementPythonModule::SSTElementPythonModule(std::string library) :
+SSTElementPythonModule::SSTElementPythonModule(const std::string& library) :
     library(library),
     primary_module(NULL)
 {

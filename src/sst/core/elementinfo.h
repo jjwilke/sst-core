@@ -55,19 +55,31 @@ const std::vector<int> SST_ELI_VERSION = {0, 9, 0};
 
 namespace ELI {
 
+template <class> struct Wrap { typedef void type; };
+
 template <class Policy, class... Policies>
-class FactoryInfo : public Policy, public FactoryInfo<Policies...>
+class FactoryInfoImpl : public Policy, public FactoryInfoImpl<Policies...>
 {
-  using Parent=FactoryInfo<Policies...>;
+  using Parent=FactoryInfoImpl<Policies...>;
  public:
-  template <class T> FactoryInfo(T* t) :
+  template <class T> FactoryInfoImpl(T* t) :
     Policy(t), Parent(t)
   {
   }
 
-  template <class U> FactoryInfo(OldELITag& tag, U* u) :
+  template <class U> FactoryInfoImpl(OldELITag&& tag, U* u) :
     Policy(tag,u), Parent(tag,u)
   {
+  }
+
+  template <class U> FactoryInfoImpl(OldELITag& tag, U* u) :
+    Policy(tag,u), Parent(tag,u)
+  {
+  }
+
+  template <class XMLNode> void outputXML(XMLNode* node){
+    Policy::outputXML(node);
+    Parent::outputXML(node);
   }
 
   void toString(std::ostream& os) const {
@@ -100,7 +112,16 @@ class FactoryInfoBase {
   const std::vector<int>& getELICompiledVersion() const {
     return compiled_;
   }
+
   std::string getELIVersionString() const;
+
+  void toString(std::ostream& os) const;
+
+  template <class XMLNode> void outputXML(XMLNode* node) const {
+    node->SetAttribute("Name", getName().c_str());
+    node->SetAttribute("Description", getDescription().c_str());
+  }
+
 
  protected:
   template <class T> FactoryInfoBase(T* UNUSED(t)) :
@@ -114,6 +135,11 @@ class FactoryInfoBase {
   {
   }
 
+  template <class U> FactoryInfoBase(OldELITag&& tag, U* u) :
+    FactoryInfoBase(tag,u)
+  {
+  }
+
   template <class U> FactoryInfoBase(OldELITag& tag, U* u) :
     lib_(tag.lib),
     name_(u->name),
@@ -122,8 +148,6 @@ class FactoryInfoBase {
     date_("UNKNOWN")
   {
   }
-
-  void toString(std::ostream& os) const;
 
  private:
   std::string lib_;
@@ -135,44 +159,24 @@ class FactoryInfoBase {
   std::vector<int> compiled_;
 };
 
-template <> class FactoryInfo<void> : public FactoryInfoBase {
+template <> class FactoryInfoImpl<void> : public FactoryInfoBase {
  protected:
-  template <class T> FactoryInfo(T* t) :
+  template <class T> FactoryInfoImpl(T* t) :
     FactoryInfoBase(t)
   {
   }
 
-  template <class U> FactoryInfo(OldELITag& tag, U* u) :
+  template <class U> FactoryInfoImpl(OldELITag& tag, U* u) :
+    FactoryInfoBase(tag, u)
+  {
+  }
+
+  template <class U> FactoryInfoImpl(OldELITag&& tag, U* u) :
     FactoryInfoBase(tag, u)
   {
   }
 
 };
-
-template <class Base, class... Args> struct FactoryCtorBase {
-  virtual Base* create(Args... args) = 0;
-};
-
-#define ELI_RegisterCommon(Base) \
-  template <class... __Args> \
-  using Library = ::SST::ELI::ElementLibrary<Base,__Args...>; \
-  template <class __TT, class... __Args> \
-  using Instance = ::SST::ELI::FactoryInstance<Base,__TT,__Args...>;
-
-#define ELI_RegisterBase(Base,...) \
-  ELI_RegisterCommon(Base) \
-  using Info = ::SST::ELI::FactoryInfo<__VA_ARGS__,void>;
-
-#define ELI_RegisterBaseDefault(Base) \
-  ELI_RegisterCommon(Base) \
-  using Info = ::SST::ELI::FactoryInfo<void>;
-
-#define ELI_RegisterCtor(Base,...) \
-  template <class __TT> \
-  using Factory = ::SST::ELI::FactoryInstance<Base,__TT,__VA_ARGS__>; \
-  static ::SST::ELI::ElementLibrary<Base,__VA_ARGS__>* getLibrary(const std::string& name){ \
-    return ::SST::ELI::ElementDatabase::getLibrary<Base,__VA_ARGS__>(name); \
-  }
 
 class ImplementsParamInfo {
  public:
@@ -184,6 +188,21 @@ class ImplementsParamInfo {
 
    void toString(std::ostream& os) const {
      os << getParametersString() << "\n";
+   }
+
+   template <class XMLNode> void outputXML(XMLNode* node) const {
+     // Build the Element to Represent the Component
+     int idx = 0;
+     for (const ElementInfoParam& param : params_){;
+       // Build the Element to Represent the Parameter
+       auto* XMLParameterElement = new XMLNode("Parameter");
+       XMLParameterElement->SetAttribute("Index", idx);
+       XMLParameterElement->SetAttribute("Name", param.name);
+       XMLParameterElement->SetAttribute("Description", param.description);
+       if (param.defaultValue) XMLParameterElement->SetAttribute("Default", param.defaultValue);
+       node->LinkEndChild(XMLParameterElement);
+       ++idx;
+     }
    }
 
    const Params::KeySet_t& getParamNames() const {
@@ -256,6 +275,22 @@ class ImplementsStatsInfo {
     os << getStatisticsString() << "\n";
   }
 
+  template <class XMLNode> void outputXML(XMLNode* node) const {
+    // Build the Element to Represent the Component
+    int idx = 0;
+    for (const ElementInfoStatistic& stat : stats_){
+      // Build the Element to Represent the Parameter
+      auto* XMLStatElement = new XMLNode("Statistic");
+      XMLStatElement->SetAttribute("Index", idx);
+      XMLStatElement->SetAttribute("Name", stat.name);
+      XMLStatElement->SetAttribute("Description", stat.description);
+      if (stat.units) XMLStatElement->SetAttribute("Units", stat.units);
+      XMLStatElement->SetAttribute("EnableLevel", stat.enableLevel);
+      node->LinkEndChild(XMLStatElement);
+      ++idx;
+    }
+  }
+
   std::string getStatisticsString() const;
 };
 
@@ -264,6 +299,28 @@ class ImplementsCategoryInfo {
  public:
   uint32_t category() const {
     return cat_;
+  }
+
+  static const char* categoryName(int cat){
+    switch(cat){
+    case COMPONENT_CATEGORY_PROCESSOR:
+      return "PROCESSOR COMPONENT";
+    case COMPONENT_CATEGORY_MEMORY:
+      return "MEMORY COMPONENT";
+    case COMPONENT_CATEGORY_NETWORK:
+      return "NETWORK COMPONENT";
+    case COMPONENT_CATEGORY_SYSTEM:
+      return "SYSTEM COMPONENT";
+    default:
+      return "UNCATEGORIZED COMPONENT";
+    }
+  }
+
+  void toString(std::ostream& UNUSED(os)) const {
+    os << "CATEGORY: " << categoryName(cat_) << "\n";
+  }
+
+  template <class XMLNode> void outputXML(XMLNode* UNUSED(node)){
   }
 
  protected:
@@ -276,8 +333,6 @@ class ImplementsCategoryInfo {
     cat_(u->category)
   {
   }
-
-  void toString(std::ostream& UNUSED(os)) const {}
 
  private:
   uint32_t cat_;
@@ -295,6 +350,19 @@ class ImplementsPortsInfo {
 
   void toString(std::ostream& os) const {
     os << getPortsString() << "\n";
+  }
+
+  template <class XMLNode> void outputXML(XMLNode* node) const {
+    // Build the Element to Represent the Component
+    int idx = 0;
+    for (const ElementInfoPort& port : ports_){
+      auto* XMLPortElement = new XMLNode("Port");
+      XMLPortElement->SetAttribute("Index", idx);
+      XMLPortElement->SetAttribute("Name", port.name);
+      XMLPortElement->SetAttribute("Description", port.description);
+      node->LinkEndChild(XMLPortElement);
+      ++idx;
+    }
   }
 
  protected:
@@ -338,6 +406,19 @@ class ImplementsSubComponentInfo {
     os << getSubComponentSlotString() << "\n";
   }
 
+  template <class XMLNode> void outputXML(XMLNode* node) const {
+    int idx = 0;
+    for (const ElementInfoSubComponentSlot& slot : slots_){
+      auto* element = new XMLNode("SubComponentSlot");
+      element->SetAttribute("Index", idx);
+      element->SetAttribute("Name", slot.name);
+      element->SetAttribute("Description", slot.description);
+      element->SetAttribute("Interface", slot.superclass);
+      node->LinkEndChild(element);
+      ++idx;
+    }
+  }
+
  protected:
   template <class T> ImplementsSubComponentInfo(T* UNUSED(t)) :
     slots_(T::ELI_getSubcomponentSlots())
@@ -367,6 +448,10 @@ class ImplementsInterface {
     os << "Interface: " << iface_ << "\n";
   }
 
+  template <class XMLNode> void outputXML(XMLNode* node) const {
+    node->SetAttribute("Interface", iface_.c_str());
+  }
+
  protected:
   template <class T> ImplementsInterface(T* UNUSED(t)) :
     iface_(T::ELI_getInterface())
@@ -382,136 +467,114 @@ class ImplementsInterface {
   std::string iface_;
 };
 
-
-//template <class... Args> Args... getDummyCtorValues();
-
-template <class> struct wrap { typedef void type; };
-
-/**
- * @class callCreate
- * ELI_customCreate is not a required method for any of the classes.
- * This uses SFINAE tricks to call on classes that implement
- * the method or avoid calling it on classes that don't implement it
- */
-template<typename T, class... Args>
-struct CallCreate {
- public:
-  template <class... InArgs>
-  T* operator()(InArgs&&... args){
-    //if we compile here, class T does not have a custom create
-    return new T(std::forward<InArgs>(args)...);
-  }
-};
-
-/**
-template<typename T, class... Args>
-struct CallCreate<T, void, Args...>
-{
- public:
-  template <class... InArgs>
-  T* operator()(InArgs&&... args){
-    //if we compile here, class T does not have a custom create
-    return new T(std::forward<InArgs>(args)...);
-  }
-};
-
-
-template<typename T, class... Args>
-struct CallCreate<T,
-  typename wrap<
-    decltype(std::declval<T>().ELI_customCreate(getDummyCtorValues<Args...>()))
-   >::type, Args...
-> : public std::true_type
-{
- public:
-  template <class... InArgs>
-  T* operator()(InArgs&&... args){
-    return T::ELI_customCreate(std::forward<InArgs>(args)...);
-  }
-};
-*/
-
-template <class Base, class... Args>
-struct FactoryCtor
-{
-  virtual Base* create(Args... ctorArgs) = 0;
-};
-
 template <class Base, class T, class... Args>
-struct CachedFactoryCtor : public FactoryCtor<Base,Args...>
+struct CachedAllocator
 {
-  Base* create(Args... ctorArgs) override {
+  Base* operator()(Args... ctorArgs) override {
     if (!cached_){
-      cached_ = CallCreate<T,Args...>(std::forward<Args>(ctorArgs)...);
+      cached_ = new T(std::forward<Args>(ctorArgs)...);
     }
     return cached_;
   }
 
   static Base* cached_;
 };
+template <class Base, class T, class... Args>
+  Base* CachedAllocator<Base,T,Args...>::cached_ = nullptr;
+
+
+template <class Base, class... Args>
+struct Factory
+{
+  typedef Base* (*createFxn)(Args...);
+
+  virtual Base* create(Args... ctorArgs) = 0;
+};
+
+template <class Base>
+struct FactoryInfo : public Base::Info
+{
+  template <class T> FactoryInfo(T* t) :
+    Base::Info(t)
+  {
+  }
+
+  template <class Info> FactoryInfo(OldELITag& tag, Info* info) :
+    Base::Info(tag,info)
+  {
+  }
+
+};
 
 template <class Base, class T, class... Args>
-struct FactoryCtorInstance : public FactoryCtor<Base,Args...>
+struct Allocator
+{
+  T* operator()(Args... args){
+    return new T(std::forward<Args>(args)...);
+  }
+};
+
+
+template <class Base, class T, class... Args>
+struct DerivedFactory : public Factory<Base,Args...>
 {
   Base* create(Args... ctorArgs) override {
-    // return new T(id, params);
-    return CallCreate<T, Args...>()(std::forward<Args>(ctorArgs)...);
+    return Allocator<Base,T,Args...>()(std::forward<Args>(ctorArgs)...);
   }
 };
 
 template <class Base, class... Args>
-struct FactoryCtorInstance<Base,OldELITag,Args...> :
-  public FactoryCtorBase<Base,Args...>
+struct DerivedFactory<Base,OldELITag,Args...> :
+  public Factory<Base,Args...>
 {
- public:
-  typedef Base* (*createFxn)(Args...);
+  using typename Factory<Base,Args...>::createFxn;
+
+  DerivedFactory(createFxn fxn) :
+    create_(fxn)
+  {
+  }
 
   Base* create(Args... ctorArgs) override {
     return create_(std::forward<Args>(ctorArgs)...);
   }
 
- protected:
-  FactoryCtorInstance(OldELITag UNUSED(tag), createFxn fxn) :
-    create_(fxn)
-  {
-  }
-
  private:
   createFxn create_;
+
 };
 
-template <class Base, class... Args>
-struct Factory :
-  public FactoryCtor<Base,Args...>,
+template <class Base, class T>
+struct DerivedFactoryInfo : public FactoryInfo<Base>
+{
+  DerivedFactoryInfo() : FactoryInfo<Base>((T*)nullptr)
+  {
+  }
+
+};
+
+template <class Base>
+struct DerivedFactoryInfo<Base,OldELITag> :
   public Base::Info
 {
-  template <class T> Factory(T* t) : Base::Info(t) {}
+  template <class Info>
+  DerivedFactoryInfo(const std::string& library, Info* info) :
+    Base::Info(OldELITag{library}, info)
+  {
+  }
 
-  template <class Info> Factory(OldELITag tag, Info* info) : Base::Info(tag,info) {}
 };
 
-template <class Base, class T, class... Args>
-struct FactoryInstance :
-  public FactoryCtorInstance<Base,T,Args...>,
-  public Factory<Base,Args...>
-{
-  FactoryInstance() :
-    FactoryCtorInstance<Base,T,Args...>(),
-    Factory<Base,Args...>((T*)nullptr)
-  {
+template <class Base, class T>
+struct Instantiate {
+  static bool isLoaded() {
+    return loaded;
   }
 
-  Base* create(Args... ctorArgs) override {
-    return FactoryCtorInstance<Base,T,Args...>::create(std::forward<Args>(ctorArgs)...);
-  }
+  static const bool loaded;
+};
 
-  template <class Fxn, class Info>
-  FactoryInstance(OldELITag tag, Fxn fxn, Info* info) :
-    FactoryCtorInstance<Base,OldELITag,Args...>(tag,fxn),
-    Factory<Base,Args...>(tag, info)
-  {
-  }
-
+template <class Base, class T, class CtorTuple>
+struct InstantiateCustomCtor {
   static bool isLoaded() {
     return loaded;
   }
@@ -533,12 +596,42 @@ class DataBase {
   static std::set<std::string> loaded_;
 };
 
+template <class Base> class InfoLibrary
+{
+ public:
+  using BaseInfo = typename Base::Info;
+
+  BaseInfo* getInfo(const std::string& name) {
+    auto iter = infos_.find(name);
+    if (iter == infos_.end()){
+      return nullptr;
+    } else {
+      return iter->second;
+    }
+  }
+
+  int numEntries() const {
+    return infos_.size();
+  }
+
+  const std::map<std::string, BaseInfo*> getMap() const {
+    return infos_;
+  }
+
+  void addInfo(BaseInfo* info){
+    infos_[info->getName()] = info;
+  }
+
+ private:
+  std::map<std::string, BaseInfo*> infos_;
+};
 
 template <class Base, class... CtorArgs>
-class ElementLibrary
+class FactoryLibrary
 {
  public:
   using BaseFactory = Factory<Base,CtorArgs...>;
+
   BaseFactory* getFactory(const std::string &name) {
     auto iter = factories_.find(name);
     if (iter == factories_.end()){
@@ -548,20 +641,48 @@ class ElementLibrary
     }
   }
 
-  static ElementLibrary* get(const std::string& name);
+  const std::map<std::string, BaseFactory*>& getMap() const {
+    return factories_;
+  }
 
-  void addFactory(BaseFactory* f){
-    factories_[f->getName()] = f;
+  void addFactory(const std::string& name, BaseFactory* fact){
+    factories_[name] = fact;
   }
 
  private:
   std::map<std::string, BaseFactory*> factories_;
 };
 
-template <class Base, class... CtorArgs>
-class ElementLibraryDatabase {
+template <class Base>
+class InfoLibraryDatabase {
  public:
-  using Library=ElementLibrary<Base,CtorArgs...>;
+  using Library=InfoLibrary<Base>;
+  using BaseInfo=typename Library::BaseInfo;
+
+  static Library* getLibrary(const std::string& name){
+    if (!libraries){
+      libraries = std::make_unique<std::map<std::string,Library*>>();
+    }
+    auto iter = libraries->find(name);
+    if (iter == libraries->end()){
+      DataBase::addLoaded(name);
+      auto* info = new Library;
+      (*libraries)[name] = info;
+      return info;
+    } else {
+      return iter->second;
+    }
+  }
+
+ private:
+  // Database - needs to be a pointer for static init order
+  static std::unique_ptr<std::map<std::string,Library*>> libraries;
+};
+
+template <class Base, class... CtorArgs>
+class FactoryLibraryDatabase {
+ public:
+  using Library=FactoryLibrary<Base,CtorArgs...>;
   using BaseFactory=typename Library::BaseFactory;
 
   static Library* getLibrary(const std::string& name){
@@ -579,39 +700,173 @@ class ElementLibraryDatabase {
     }
   }
 
- static bool addFactory(BaseFactory* factory){
-   auto* info = getLibrary(factory->getLibrary());
-   info->addFactory(factory);
-   return true;
- }
-
  private:
   // Database - needs to be a pointer for static init order
   static std::unique_ptr<std::map<std::string,Library*>> libraries;
 };
+
 template <class Base, class... CtorArgs>
- std::unique_ptr<std::map<std::string,ElementLibrary<Base,CtorArgs...>*>>
-  ElementLibraryDatabase<Base,CtorArgs...>::libraries;
+ std::unique_ptr<std::map<std::string,FactoryLibrary<Base,CtorArgs...>*>>
+  FactoryLibraryDatabase<Base,CtorArgs...>::libraries;
 
-template <class Base, class... Args>
-ElementLibrary<Base,Args...>*
-ElementLibrary<Base,Args...>::get(const std::string &name){
-  return ElementLibraryDatabase<Base,Args...>::getLibrary(name);
-}
+template <class Base>
+ std::unique_ptr<std::map<std::string,InfoLibrary<Base>*>>
+  InfoLibraryDatabase<Base>::libraries;
 
-template <class T> struct FactoryCtorInstance<SSTElementPythonModule,T> :
- public CachedFactoryCtor<SSTElementPythonModule,T>
+template <class T, class U>
+struct is_tuple_constructible : public std::false_type {};
+
+template <class T, class... Args>
+struct is_tuple_constructible<T, std::tuple<Args...>> :
+  public std::is_constructible<T, Args...>
 {
 };
 
-template <class Base, class T, class... CtorArgs>
- const bool FactoryInstance<Base,T,CtorArgs...>::loaded =
-  ElementLibraryDatabase<Base,CtorArgs...>::addFactory(new FactoryInstance<Base,T,CtorArgs...>);
+template <class Base, class CtorTuple>
+struct ElementsFactory {};
 
-struct ElementDatabase {
+template <class Base, class... Args>
+struct ElementsFactory<Base, std::tuple<Args...>>
+{
+  static FactoryLibrary<Base,Args...>* getLibrary(const std::string& name){
+    return FactoryLibraryDatabase<Base,Args...>::getLibrary(name);
+  }
+
+  template <class T> static Factory<Base,Args...>* makeFactory(){
+    return new DerivedFactory<Base,T,Args...>();
+  }
+
+};
+
+template <class Base>
+struct ElementsInfo
+{
+  static InfoLibrary<Base>* getLibrary(const std::string& name){
+    return InfoLibraryDatabase<Base>::getLibrary(name);
+  }
+
+  template <class T> static FactoryInfo<Base>* makeInfo(){
+    return new DerivedFactoryInfo<Base,T>();
+  }
+
+};
+
+template <class Base, class Ctor, class... Ctors>
+struct CtorList : public CtorList<Base,Ctors...>
+{
+  template <class T, class U=T>
+  static typename std::enable_if<is_tuple_constructible<U,Ctor>::value, bool>::type
+  add(){
+    auto* fact = ElementsFactory<Base,Ctor>::template makeFactory<U>();
+    auto* info = ElementsInfo<Base>::template makeInfo<U>();
+    ElementsInfo<Base>::getLibrary(T::ELI_getLibrary())->addInfo(info);
+    ElementsFactory<Base,Ctor>::getLibrary(T::ELI_getLibrary())->addFactory(T::ELI_getName(), fact);
+    return CtorList<Base,Ctors...>::template add<T>();
+  }
+
+  template <class T, class U=T>
+  static typename std::enable_if<!is_tuple_constructible<U,Ctor>::value, bool>::type
+  add(){
+    return CtorList<Base,Ctors...>::template add<T>();
+  }
+
+  static typename Base::Info* getInfo(const std::string& elemlib, const std::string& name){
+    auto* lib = ElementsInfo<Base>::getLibrary(elemlib);
+    if (lib){
+      return lib->getInfo(name);
+    } else {
+      return nullptr;
+    }
+  }
+
+  //Ctor is a tuple
+  template <class... InArgs>
+  typename std::enable_if<std::is_convertible<std::tuple<InArgs&&...>, Ctor>::value, Base*>::type
+  operator()(const std::string& elemlib, const std::string& name, InArgs&&... args){
+    auto* lib = ElementsFactory<Base,Ctor>::getLibrary(elemlib);
+    if (lib){
+      auto* fact = lib->getFactory(name);
+      if (fact){
+        return fact->create(std::forward<InArgs>(args)...);
+      }
+      std::cerr << "For library " << elemlib << ", " << Base::ELI_baseName()
+               << " " << name << " does not provide matching constructor"
+               << std::endl;
+    }
+    std::cerr << "No matching constructors found in library " << elemlib
+              << " for base " << Base::ELI_baseName() << std::endl;
+    abort();
+  }
+
+  //Ctor is a tuple
+  template <class... InArgs>
+  typename std::enable_if<!std::is_convertible<std::tuple<InArgs&&...>, Ctor>::value, Base*>::type
+  operator()(const std::string& elemlib, const std::string& name, InArgs&&... args){
+    //I don't match - pass it up
+    return CtorList<Base,Ctors...>::operator()(elemlib, name, std::forward<InArgs>(args)...);
+  }
+
+};
+
+
+
+template <class T, class Enable=void>
+struct normalize_arg { using type=T; };
+
+template <class T>
+struct normalize_arg<T*&,void> { using type=T*; };
+
+template <class T> struct normalize_arg<T,
+  typename std::enable_if<std::is_integral<typename  std::remove_reference<T>::type>::value, void>::type>
+{
+  using type=int64_t;
+};
+
+template <class T>
+struct normalize_arg<T,
+  typename std::enable_if<std::is_floating_point<typename std::remove_reference<T>::type>::value, void>::type>
+{
+  using type=double;
+};
+
+template <typename... T>
+using tuple_with_normalized_args = std::tuple<typename normalize_arg<T>::type...>;
+
+template <class T> struct normalized_tuple {};
+template <class... Args> struct normalized_tuple<std::tuple<Args...>> {
+  using type = typename tuple_with_normalized_args<Args...>::type;
+};
+
+template <class Base> struct CtorList<Base,void>
+{
+  template <class T> static bool add(){
+    return true;
+  }
+};
+
+template <class T> struct Allocator<SSTElementPythonModule,T> :
+ public CachedAllocator<SSTElementPythonModule,T>
+{
+};
+
+template <class Base, class T>
+ const bool Instantiate<Base,T>::loaded = Base::Ctor::template add<T>();
+
+template <class Base, class T, class CtorTuple>
+ const bool InstantiateCustomCtor<Base,T,CtorTuple>::loaded
+   = CtorList<Base,void>::template addCustomCtor<T,CtorTuple>();
+
+struct FactoryDatabase {
   template <class T, class... Args>
-  static ElementLibrary<T,Args...>* getLibrary(const std::string& name){
-    return ElementLibraryDatabase<T,Args...>::getLibrary(name);
+  static FactoryLibrary<T,Args...>* getLibrary(const std::string& name){
+    return FactoryLibraryDatabase<T,Args...>::getLibrary(name);
+  }
+};
+
+struct InfoDatabase {
+  template <class T>
+  static InfoLibrary<T>* getLibrary(const std::string& name){
+    return InfoLibraryDatabase<T>::getLibrary(name);
   }
 };
 
@@ -650,6 +905,65 @@ constexpr unsigned SST_ELI_getTertiaryNumberFromVersion(SST_ELI_element_version_
 **************************************************************************/
 
 #define ELI_FORWARD_AS_ONE(...) __VA_ARGS__
+
+#define ELI_CTOR(...) std::tuple<__VA_ARGS__>
+#define ELI_DEFAULT_CTOR() std::tuple<>
+
+#define SST_ELI_REGISTER_COMMON(Base) \
+  using __LocalEliName = Base; \
+  template <class... __Args> \
+  using FactoryLibrary = ::SST::ELI::FactoryLibrary<Base,__Args...>; \
+  using InfoLibrary = ::SST::ELI::InfoLibrary<Base>; \
+  template <class __TT> \
+  using InfoInstance = ::SST::ELI::DerivedFactoryInfo<Base,__TT>; \
+  static InfoLibrary* getInfoLibrary(const std::string& name){ \
+    return SST::ELI::InfoDatabase::getLibrary<Base>(name); \
+  } \
+  static const char* ELI_baseName(){ return #Base; }
+
+#define SST_ELI_REGISTER_BASE(Base,...) \
+  using Info = ::SST::ELI::FactoryInfoImpl<__VA_ARGS__,void>; \
+  SST_ELI_REGISTER_COMMON(Base)
+
+#define SST_ELI_REGISTER_BASE_DEFAULT(Base) \
+  using Info = ::SST::ELI::FactoryInfoImpl<void>; \
+  SST_ELI_REGISTER_COMMON(Base)
+
+#define SST_ELI_REGISTER_CTORS_COMMON(...) \
+  using Ctor = ::SST::ELI::CtorList<__LocalEliName,__VA_ARGS__,void>; \
+  static __LocalEliName::Info* getInfo(const std::string& elemlib, const std::string& name){ \
+    return Ctor::getInfo(elemlib, name); \
+  } \
+  template <class... InArgs> static __LocalEliName* create( \
+    const std::string& elemlib, const std::string& elem, InArgs&&... args){ \
+    return Ctor()(elemlib, elem, std::forward<InArgs>(args)...); \
+  }
+
+#define SST_ELI_REGISTER_CTORS(...) \
+  SST_ELI_REGISTER_CTORS_COMMON(__VA_ARGS__) \
+  template <class __TT, class... __CtorArgs> \
+  using DerivedFactory = ::SST::ELI::DerivedFactory<__LocalEliName,__TT,__CtorArgs...>; \
+  template <class... __InArgs> static FactoryLibrary<__InArgs...>* getFactoryLibrary(const std::string& name){ \
+    return ::SST::ELI::FactoryDatabase::getLibrary<__LocalEliName,__InArgs...>(name); \
+  }
+
+//I can make some extra using typedefs because I have only a single ctor
+#define SST_ELI_REGISTER_CTOR(...) \
+  SST_ELI_REGISTER_CTORS_COMMON(ELI_CTOR(__VA_ARGS__)) \
+  template <class __TT> \
+  using DerivedFactory = ::SST::ELI::DerivedFactory<__LocalEliName,__TT,__VA_ARGS__>; \
+  static FactoryLibrary<__VA_ARGS__>* getFactoryLibrary(const std::string& name){ \
+    return SST::ELI::FactoryDatabase::getLibrary<__LocalEliName,__VA_ARGS__>(name); \
+  }
+
+//I can make some extra using typedefs because I have only a single ctor
+#define SST_ELI_REGISTER_DEFAULT_CTOR() \
+  SST_ELI_REGISTER_CTORS_COMMON(ELI_DEFAULT_CTOR()) \
+  template <class __TT> \
+  using DerivedFactory = ::SST::ELI::DerivedFactory<__LocalEliName,__TT,__VA_ARGS__>; \
+  static FactoryLibrary<__VA_ARGS__>* getFactoryLibrary(const std::string& name){ \
+    return SST::ELI::FactoryDatabase::getLibrary<__LocalEliName,__VA_ARGS__>(name); \
+  }
 
 #define SST_ELI_INSERT_COMPILE_INFO() \
     static const std::string& ELI_getCompileDate() { \
@@ -701,14 +1015,6 @@ constexpr unsigned SST_ELI_getTertiaryNumberFromVersion(SST_ELI_element_version_
     return interface; \
   }
 
-#define SST_ELI_REGISTER_COMPONENT(cls,lib,name,version,desc,cat)   \
-    bool ELI_isLoaded() {                           \
-        return SST::ComponentDoc<cls,SST::SST_ELI_getMajorNumberFromVersion(version),SST::SST_ELI_getMinorNumberFromVersion(version),SST::SST_ELI_getTertiaryNumberFromVersion(version)>::isLoaded(); \
-    } \
-    SST_ELI_CATEGORY_INFO(cat) \
-    SST_ELI_DEFAULT_INFO(lib,name,desc) \
-    SST_ELI_INSERT_COMPILE_INFO()
-
 #define SST_ELI_ELEMENT_VERSION(...) {__VA_ARGS__}
 
 #define SST_ELI_DOCUMENT_PARAMS(...)                              \
@@ -716,7 +1022,6 @@ constexpr unsigned SST_ELI_getTertiaryNumberFromVersion(SST_ELI_element_version_
         static std::vector<SST::ElementInfoParam> var = { __VA_ARGS__ } ; \
         return var; \
     }
-
 
 #define SST_ELI_DOCUMENT_STATISTICS(...)                                \
     static const std::vector<SST::ElementInfoStatistic>& ELI_getStatistics() {  \
@@ -737,49 +1042,34 @@ constexpr unsigned SST_ELI_getTertiaryNumberFromVersion(SST_ELI_element_version_
         return var; \
     }
 
+#define SST_ELI_REGISTER_DERIVED(base,cls,lib,name,version,desc) \
+  bool ELI_isLoaded() { \
+      return SST::ELI::Instantiate<base,cls>::isLoaded(); \
+  } \
+  SST_ELI_DEFAULT_INFO(lib,name,ELI_FORWARD_AS_ONE(version),desc)
 
-#define SST_ELI_REGISTER_SUBCOMPONENT(cls,lib,name,version,desc,interface)   \
-    bool ELI_isLoaded() {  \
-      return SST::ELI::FactoryInstance<SST::SubComponent,cls>::isLoaded(); \
-    } \
-    SST_ELI_INTERFACE_INFO(interface) \
-    SST_ELI_DEFAULT_INFO(lib,name,desc) \
-    SST_ELI_INSERT_COMPILE_INFO()
+#define SST_ELI_REGISTER_INSTANTIATE_CUSTOM_CTOR(base,cls,lib,name,version,desc,ctor_tuple) \
+  bool ELI_isLoaded() { \
+      return SST::ELI::InstantiateCustomCtor<base,cls,ctor_tuple>::isLoaded(); \
+  } \
+  SST_ELI_DEFAULT_INFO(lib,name,ELI_FORWARD_AS_ONE(version),desc)
+
+#define SST_ELI_REGISTER_DERIVED_NEW_CTOR(base,cls,lib,name,version,desc) \
+  bool ELI_isLoaded() { \
+      return SST::ELI::Instantiate<base,cls>::isLoaded(); \
+  } \
+  SST_ELI_DEFAULT_INFO(lib,name,ELI_FORWARD_AS_ONE(version),desc)
 
 #define SST_ELI_REGISTER_MODULE(cls,lib,name,version,desc,interface)    \
-    bool ELI_isLoaded() {                           \
-      return SST::ELI::FactoryInstance<SST::Module,cls>::isLoaded(); \
-    } \
-    SST_ELI_INTERFACE_INFO(interface) \
-    SST_ELI_DEFAULT_INFO(lib,name,ELI_FORWARD_AS_ONE(version),desc)
-
-
+  SST_ELI_REGISTER_DERIVED(SST::Module,cls,lib,name,ELI_FORWARD_AS_ONE(version),desc) \
+  SST_ELI_INTERFACE_INFO(interface)
 
 #define SST_ELI_REGISTER_PARTITIONER(cls,lib,name,version,desc) \
-    bool ELI_isLoaded() { \
-        return SST::ELI::FactoryInstance<SST::Partition::SSTPartitioner, cls, \
-                 SST::RankInfo, SST::RankInfo, int>::isLoaded(); \
-    } \
-    SST_ELI_DEFAULT_INFO(lib,name,ELI_FORWARD_AS_ONE(version),desc)
-
+    SST_ELI_REGISTER_DERIVED(SST::Partition::SSTPartitioner,cls,lib,name,ELI_FORWARD_AS_ONE(version),desc)
 
 #define SST_ELI_REGISTER_PYTHON_MODULE(cls,lib,version)    \
-    bool ELI_isLoaded() { \
-        return SST::ELI::FactoryInstance<SST::SSTElementPythonModule,cls>::isLoaded(); \
-    } \
-    SST_ELI_DEFAULT_INFO(lib,name,ELI_FORWARD_AS_ONE(version),desc)
+  SST_ELI_REGISTER_DERIVED(SST::SSTElementPythonModule,cls,lib,name,ELI_FORWARD_AS_ONE(version),desc)
 
-#define SST_ELI_REGISTER_CTOR(base,cls,lib,name,version,desc,...) \
-  bool ELI_isLoaded() { \
-      return SST::ELI::FactoryInstance<base,cls,__VA_ARGS__>::isLoaded(); \
-  } \
-  SST_ELI_DEFAULT_INFO(lib,name,ELI_FORWARD_AS_ONE(version),desc)
-
-#define SST_ELI_REGISTER_DEFAULT_CTOR(base,cls,lib,name,version,desc) \
-  bool ELI_isLoaded() { \
-      return SST::ELI::FactoryInstance<base,cls>::isLoaded(); \
-  } \
-  SST_ELI_DEFAULT_INFO(lib,name,ELI_FORWARD_AS_ONE(version),desc)
 
 } //namespace SST
 

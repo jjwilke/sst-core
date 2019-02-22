@@ -99,7 +99,7 @@ public:
       // ensure library is already loaded...
       requireLibrary(elemlib);
 
-      auto* lib = ELI::ElementDatabase::getLibrary<Statistics::Statistic<T>, Args...>(elemlib);
+      auto* lib = ELI::FactoryDatabase::getLibrary<Statistics::Statistic<T>, Args...>(elemlib);
       if (lib){
         auto* fact = lib->getFactory(elem);
         if (fact){

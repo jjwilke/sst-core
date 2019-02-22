@@ -22,9 +22,14 @@ namespace SST {
     class Module {
 
     public:
-      ELI_RegisterBase(Module,
+      SST_ELI_REGISTER_BASE(Module,
          ELI::ImplementsParamInfo,
          ELI::ImplementsInterface)
+
+      SST_ELI_REGISTER_CTORS(
+         ELI_CTOR(SST::Params&),
+         ELI_CTOR(Component*,SST::Params&)
+      )
 
       Module() {}
       virtual ~Module() {}
@@ -36,6 +41,108 @@ namespace SST {
       }
 
     };
+
+/**
+//because the old module interface supported two ctors for dissimilar objects
+//I need SFINAE tricks here to enable_if the right version
+namespace ELI {
+
+
+
+template <>
+struct Factory<Module> :
+  public Module::Info,
+  public FactoryCtor<Module,SST::Params&>,
+  public FactoryCtor<Module,Component*,SST::Params&>
+{
+  template <class T> Factory(T* t) :
+    Module::Info(t)
+  {
+  }
+
+  template <class Info> Factory(OldELITag& tag, Info* info) :
+    Module::Info(tag,info)
+  {
+  }
+};
+
+template <>
+struct DerivedFactory<Module, OldELITag> :
+  public Factory<Module>
+{
+  using WithCompFxn = FactoryCtor<Module,Component*,SST::Params&>::createFxn;
+  using WithoutCompFxn = FactoryCtor<Module,SST::Params&>::createFxn;
+
+  template <class Info>
+  DerivedFactory(OldELITag tag, WithCompFxn wfxn, WithoutCompFxn wofxn, Info* info) :
+    Factory<Module>(tag, info),
+    withFxn_(wfxn),
+    withoutFxn_(wofxn)
+  {
+  }
+
+  Module* create(SST::Params& p) override {
+    return withoutFxn_(p);
+  }
+
+  Module* create(Component* c, SST::Params& p) override {
+    return withFxn_(c,p);
+  }
+
+ private:
+  WithCompFxn withFxn_;
+  WithoutCompFxn withoutFxn_;
+};
+
+//typename
+
+template <class T>
+struct Allocator<Module,T> {
+  template <class Q=T>
+  typename std::enable_if<std::is_constructible<T,SST::Params&>::value, Q*>::type
+  operator()(SST::Params& p){
+    return new T(p);
+  }
+
+  template <class Q=T>
+  typename std::enable_if<std::is_constructible<T,Component*,SST::Params&>::value, Q*>::type
+  operator()(Component* c, SST::Params& p){
+    return new T(c,p);
+  }
+
+  template <class Q=T>
+  typename std::enable_if<!std::is_constructible<T,SST::Params&>::value, Q*>::type
+  operator()(SST::Params& p){
+    return new T(p);
+  }
+
+  template <class Q=T>
+  typename std::enable_if<!std::is_constructible<T,Component*,SST::Params&>::value, Q*>::type
+  operator()(Component* c, SST::Params& p){
+    return new T(c,p);
+  }
+
+};
+
+template <class T>
+struct DerivedFactory<Module,T> :
+ public Factory<Module>
+{
+  DerivedFactory() : Factory<Module>((T*)nullptr){}
+
+  Module* create(SST::Params& p) override {
+    return Allocator<Module,T>()(p);
+  }
+
+  Module* create(Component* c, SST::Params& p) override {
+    return Allocator<Module,T>()(c,p);
+  }
+};
+
+}
+*/
+
+
 } //namespace SST
 
 // BOOST_CLASS_EXPORT_KEY(SST::Module)

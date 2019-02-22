@@ -18,6 +18,10 @@
 #include <sst/core/component.h>
 #include <sst/core/module.h>
 
+#define SST_ELI_REGISTER_SUBCOMPONENT(cls,lib,name,version,desc,interface)   \
+  SST_ELI_REGISTER_DERIVED(SST::SubComponent,cls,lib,name,ELI_FORWARD_AS_ONE(version),desc) \
+  SST_ELI_INTERFACE_INFO(interface)
+
 namespace SST {
 
 /**
@@ -28,13 +32,13 @@ namespace SST {
 */
 class SubComponent : public Module, public BaseComponent {
  public:
-  ELI_RegisterCtor(SubComponent,Component*,SST::Params&)
-
-  ELI_RegisterBase(SubComponent,
+  SST_ELI_REGISTER_BASE(SubComponent,
     ELI::ImplementsParamInfo,
     ELI::ImplementsPortsInfo,
     ELI::ImplementsStatsInfo,
+    ELI::ImplementsInterface,
     ELI::ImplementsSubComponentInfo)
+  SST_ELI_REGISTER_CTOR(Component*,SST::Params&)
 
 	SubComponent(Component* parent) : BaseComponent(), parent(parent) {
         my_info = parent->currentlyLoadingSubComponent;

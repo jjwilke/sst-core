@@ -31,14 +31,13 @@ namespace Statistics {
 class StatisticOutputTxt : public StatisticOutput
 {
 public:    
-  SST_ELI_REGISTER_CTOR(
+  SST_ELI_REGISTER_DERIVED(
       StatisticOutput,
       StatisticOutputTxt,
       "sst",
       "statOutputTxt",
       SST_ELI_ELEMENT_VERSION(1,0,0),
-      "Output directly to console screen",
-      SST::Params& //takes ctor
+      "Output directly to console screen"
    )
 
     /** Construct a StatOutputTxt
