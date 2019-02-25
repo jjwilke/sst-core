@@ -71,6 +71,16 @@ public:
     }
 };
 
+namespace ELI {
+template <class T> struct Allocator<SSTElementPythonModule,T> :
+ public CachedAllocator<SSTElementPythonModule,T>
+{
+};
+
 }
+}
+
+#define SST_ELI_REGISTER_PYTHON_MODULE(cls,lib,version)    \
+  SST_ELI_REGISTER_DERIVED(SST::SSTElementPythonModule,cls,lib,name,ELI_FORWARD_AS_ONE(version),desc)
 
 #endif // SST_CORE_MODEL_ELEMENT_PYTHON_H

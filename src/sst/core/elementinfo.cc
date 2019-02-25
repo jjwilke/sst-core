@@ -26,7 +26,7 @@ namespace ELI {
 std::set<std::string> DataBase::loaded_{};
 
 std::string
-FactoryInfoBase::getELIVersionString() const {
+DefaultFactoryInfo::getELIVersionString() const {
     std::stringstream stream;
     bool first = true;
     for ( int item : getELICompiledVersion() ) {
@@ -90,7 +90,7 @@ ImplementsStatsInfo::getStatisticsString() const {
 }
 
 void
-FactoryInfoBase::toString(std::ostream &os) const
+DefaultFactoryInfo::toString(std::ostream &os) const
 {
   os << "    " << getName() << ": " << getDescription() << std::endl;
   os << "    Using ELI version " << getELIVersionString() << std::endl;

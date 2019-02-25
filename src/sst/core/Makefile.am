@@ -65,6 +65,15 @@ nobase_dist_sst_HEADERS = \
 	simulation.h \
 	sparseVectorMap.h \
 	sst_types.h \
+  paramsInfo.h \
+  portsInfo.h \
+  statsInfo.h \
+  subcompSlotInfo.h \
+  interfaceInfo.h \
+  categoryInfo.h \
+  defaultInfo.h \
+  elementfactory.h \
+  oldELI.h \
 	sstinfo.h \
 	sstpart.h \
 	stopAction.h \

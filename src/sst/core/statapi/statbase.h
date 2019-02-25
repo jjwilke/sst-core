@@ -322,7 +322,8 @@ class Statistic : public StatisticBase, public StatisticCollector<T>
 {
  public:
   SST_ELI_REGISTER_BASE(Statistic,ELI::ImplementsInterface)
-  SST_ELI_REGISTER_CTOR(const std::string&, const std::string&, SST::Params&, ExtraCtorArgs...)
+  SST_ELI_REGISTER_CTOR(BaseComponent*,const std::string&, const std::string&, SST::Params&,
+                        ExtraCtorArgs...)
 
     using Datum = T;
     using StatisticCollector<T>::addData_impl;
@@ -416,13 +417,23 @@ struct ImplementsStatFields {
   SST_ELI_DEFAULT_INFO(lib,name,ELI_FORWARD_AS_ONE(version),desc) \
   SST_ELI_INTERFACE_INFO(interface)
 
+#define SST_ELI_REGISTER_CUSTOM_STATISTIC(parent,cls,lib,name,version,desc) \
+  bool ELI_isLoaded() const { \
+   return SST::ELI::InstantiateInfo<parent,cls>::isLoaded() \
+    && SST::ELI::InstantiateFactory<parent,cls>::isLoaded(); \
+  } \
+  SST_ELI_DEFAULT_INFO(lib,name,ELI_FORWARD_AS_ONE(version),desc) \
+  SST_ELI_INTERFACE_INFO(#parent) \
+  static const char* ELI_fieldName(){ return #parent "Data"; } \
+  static const char* ELI_fieldShortName(){ return #parent "Data"; }
+
 #define SST_ELI_REGISTER_STATISTIC(cls,field,lib,name,version,desc,interface) \
   bool ELI_isLoaded() const { \
    return SST::ELI::Instantiate< \
       SST::Statistics::Statistic<field>, \
-      cls##_##field##_##shortName>::isLoaded(); \
+      cls>::isLoaded(); \
   } \
-  SST_ELI_DEFAULT_INFO(lib,name,version,desc) \
+  SST_ELI_DEFAULT_INFO(lib,name,ELI_FORWARD_AS_ONE(version),desc) \
   SST_ELI_INTERFACE_INFO(interface) \
   static const char* ELI_fieldName(){ return #field; } \
   static const char* ELI_fieldShortName(){ return #field; }
@@ -434,7 +445,10 @@ struct ImplementsStatFields {
            const std::string& si, SST::Params& p, InArgs&&... ctorArgs) : \
       cls<field>(bc,sn,si,p,std::forward<InArgs>(ctorArgs)...) {} \
     bool ELI_isLoaded() const { \
-     return SST::ELI::Instantiate< \
+     return SST::ELI::InstantiateInfo< \
+        SST::Statistics::Statistic<field>, \
+        cls##_##field##_##shortName>::isLoaded() \
+         && SST::ELI::InstantiateFactory< \
         SST::Statistics::Statistic<field>, \
         cls##_##field##_##shortName>::isLoaded(); \
     } \

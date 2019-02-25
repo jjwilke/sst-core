@@ -71,4 +71,9 @@ public:
 }
 }
 
+#ifndef SST_ELI_REGISTER_PARTITIONER
+#define SST_ELI_REGISTER_PARTITIONER(cls,lib,name,version,desc) \
+    SST_ELI_REGISTER_DERIVED(SST::Partition::SSTPartitioner,cls,lib,name,ELI_FORWARD_AS_ONE(version),desc)
+#endif
+
 #endif

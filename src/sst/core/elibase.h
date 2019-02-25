@@ -94,6 +94,8 @@ struct ElementInfoSubComponentSlot {
 
 typedef ElementInfoSubComponentSlot ElementInfoSubComponentHook;
 
+template <class T> struct MethodDetect { using type=void; };
+
 } //namespace SST
 
 
