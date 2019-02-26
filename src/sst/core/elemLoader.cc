@@ -185,6 +185,8 @@ ElemLoader::loadLibrary(const std::string &elemlib, bool showErrors)
     std::string libname = "lib" + elemlib;
     lt_dlhandle lt_handle;
 
+    showErrors = true;
+
     lt_handle = lt_dlopenadvise(libname.c_str(), loaderData->advise_handle);
     if (NULL == lt_handle) {
         // So this sucks.  the preopen module runs last and if the
@@ -196,9 +198,9 @@ ElemLoader::loadLibrary(const std::string &elemlib, bool showErrors)
                     elemlib.c_str(), lt_dlerror());
             eli = followError(libname, elemlib, eli, searchPaths);
         } else {
-	    // fprintf(stderr, "Unable to open: \'%s\', not found in search paths: \'%s\'\n",
-		// elemlib.c_str(), searchPaths.c_str());
-		}
+          // fprintf(stderr, "Unable to open: \'%s\', not found in search paths: \'%s\'\n",
+          // elemlib.c_str(), searchPaths.c_str());
+        }
     } else {
         // look for an info block
         std::string infoname = elemlib + "_eli";

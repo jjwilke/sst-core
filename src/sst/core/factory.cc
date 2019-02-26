@@ -177,24 +177,6 @@ Factory::CreateComponent(ComponentId_t id,
     return NULL;
 }
 
-StatisticOutput* 
-Factory::CreateStatisticOutput(const std::string& statOutputType, const Params& statOutputParams)
-{
-    Module*           tempModule;
-    StatisticOutput*  rtnStatOut = NULL;
-    
-    // Load the Statistic Output as a module first;  This allows 
-    // us to provide StatisticOutputs as part of a element
-    tempModule = CreateModule(statOutputType, const_cast<Params&>(statOutputParams));
-    if (NULL != tempModule) {
-        // Dynamic Cast the Module into a Statistic Output, if the module is not
-        // a StatisticOutput, then return NULL
-        rtnStatOut = dynamic_cast<StatisticOutput*>(tempModule);
-    }
-    
-    return rtnStatOut;
-}
-
 bool
 Factory::DoesSubComponentSlotExist(const std::string& type, const std::string& slotName)
 {
@@ -431,7 +413,7 @@ Factory::CreateModule(const std::string& type, Params& params)
 Module* 
 Factory::LoadCoreModule_StatisticOutputs(const std::string& type, Params& params)
 {
-  return CreateStatisticOutput(type, params);
+  return Create<StatisticOutput>(type, params, params);
 }
 
 Module*
@@ -572,7 +554,11 @@ Factory::getPythonModule(std::string name)
     if (lib) {
       auto* info = lib->getInfo(elem);
       if (info){
-        return SSTElementPythonModule::create(elemlib,elem);
+        //this looks funny with name passed 3 times
+        //first is library
+        //derived name is always also the library
+        //and finally the libname needs to be passed as an arg to ctor
+        return SSTElementPythonModule::create(elemlib,elemlib,elemlib);
       }
     }
 
@@ -640,7 +626,7 @@ Factory::findLibrary(std::string elemlib, bool showErrors)
       auto* factlib = Component::getFactoryLibrary(elemlib);
       while (NULL != eic->name) {
         factlib->addFactory(eic->name, new Component::DerivedFactory<OldELITag>(eic->alloc));
-        infolib->addInfo(new Component::InfoInstance<OldELITag>(elemlib,eic));
+        infolib->addInfo(new Component::DerivedInfo<OldELITag>(elemlib,eic));
       }
     }
 
@@ -650,7 +636,7 @@ Factory::findLibrary(std::string elemlib, bool showErrors)
       auto* factlib = SubComponent::getFactoryLibrary(elemlib);
       while (NULL != eis->name) {
         factlib->addFactory(eis->name, new SubComponent::DerivedFactory<OldELITag>(eis->alloc));
-        infolib->addInfo(new SubComponent::InfoInstance<OldELITag>(elemlib, eis));
+        infolib->addInfo(new SubComponent::DerivedInfo<OldELITag>(elemlib, eis));
         eis++;
       }
     }
@@ -661,7 +647,7 @@ Factory::findLibrary(std::string elemlib, bool showErrors)
       auto* factlib = Partition::SSTPartitioner::getFactoryLibrary(elemlib);
       while (NULL != eis->name) {
         factlib->addFactory(eis->name, new Partition::SSTPartitioner::DerivedFactory<OldELITag>(eis->func));
-        infolib->addInfo(new Partition::SSTPartitioner::InfoInstance<OldELITag>(elemlib, eis));
+        infolib->addInfo(new Partition::SSTPartitioner::DerivedInfo<OldELITag>(elemlib, eis));
         eis++;
       }
     }
@@ -673,7 +659,7 @@ Factory::findLibrary(std::string elemlib, bool showErrors)
       auto* withlib = Module::getFactoryLibrary<Component*,SST::Params&>(elemlib);
       auto* wolib = Module::getFactoryLibrary<SST::Params&>(elemlib);
       while (NULL != eim->name) {
-        auto* info = new Module::InfoInstance<OldELITag>(elemlib, eim);
+        auto* info = new Module::DerivedInfo<OldELITag>(elemlib, eim);
         infolib->addInfo(info);
 
         auto* withComp = new Module::DerivedFactory<OldELITag,Component*,SST::Params&>(eim->alloc_with_comp);
@@ -695,12 +681,15 @@ Factory::findLibrary(std::string elemlib, bool showErrors)
         }
     }
 
-    //if (NULL != eli->pythonModuleGenerator ) {
-    //  auto* fact = new FactoryFinal<SSTElementPythonModule,OldELITag>(OldELITag{},
-    //                                  })
-    //  ElementDatabase::getLibrary<SSTElementPythonModule>
-    //    ElementLibraryDatabase::addPythonModule(new PythonModuleDocOldELI(elemlib, eli->pythonModuleGenerator));
-    //}
+    if (NULL != eli->pythonModuleGenerator ) {
+      auto* factLib = SSTElementPythonModule::getFactoryLibrary(elemlib);
+      auto* fact = new SSTElementPythonModule::DerivedFactory<SSTElementPythonModuleOldELI>(eli->pythonModuleGenerator);
+      factLib->addFactory(elemlib, fact);
+
+      auto* infoLib = SSTElementPythonModule::getInfoLibrary(elemlib);
+      auto* info = new SSTElementPythonModule::DerivedInfo<OldELITag>(elemlib, eli);
+      infoLib->addInfo(info);
+    }
     
     return eli;
 }

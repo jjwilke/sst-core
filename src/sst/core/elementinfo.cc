@@ -23,7 +23,7 @@ namespace SST {
 **************************************************************************/
 namespace ELI {
 
-std::set<std::string> DataBase::loaded_{};
+std::unique_ptr<std::set<std::string>> DataBase::loaded_{};
 
 std::string
 DefaultFactoryInfo::getELIVersionString() const {

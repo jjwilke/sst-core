@@ -69,6 +69,30 @@ public:
      */
     void RequireEvent(const std::string& eventname);
 
+    template <class T, class... Args>
+    T* Create(const std::string& type, SST::Params& params, Args&&... args){
+      std::string elemlib, elem;
+      std::tie(elemlib, elem) = parseLoadName(type);
+
+      requireLibrary(elemlib);
+      std::lock_guard<std::recursive_mutex> lock(factoryMutex);
+
+      auto* lib = ELI::InfoDatabase::getLibrary<T>(elemlib);
+      if (lib){
+        auto* info = lib->getInfo(elem);
+        if (info){
+          params.pushAllowedKeys(info->getParamNames());
+          T* ret = T::create(elemlib,elem,std::forward<Args>(args)...);
+          params.popAllowedKeys();
+          return ret;
+        }
+      }
+
+      // If we get to here, element doesn't exist
+      out.fatal(CALL_INFO, -1, "can't find requested %s %s\n ", T::ELI_baseName(), type.c_str());
+      return nullptr;
+    }
+
     /** Instantiate a new Module
      * @param type - Fully qualified elementlibname.modulename type
      * @param params - Parameters to pass to the Module's constructor
@@ -133,13 +157,6 @@ public:
 
     void getLoadedLibraryNames(std::set<std::string>& lib_names);
     void loadUnloadedLibraries(const std::set<std::string>& lib_names);
-
-    /** Attempt to create a new Statistic Output instantiation
-     * @param statOutputType - The name of the Statistic Output to create (Module Name)
-     * @param statOutputParams - The params to pass to the statistic output's constructor
-     * @return Newly created Statistic Output
-     */
-    Statistics::StatisticOutput* CreateStatisticOutput(const std::string& statOutputType, const Params& statOutputParams);
 
     /** Determine if a SubComponentSlot is defined in a components ElementInfoStatistic
      * @param type - The name of the component/subcomponent

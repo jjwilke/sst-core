@@ -54,6 +54,20 @@ struct NullStatisticBase<T,true> : public Statistic<T> {
   void addData_impl(T UNUSED(data)) override {}
 };
 
+template <class... Args>
+struct NullStatisticBase<std::tuple<Args...>,false> : public Statistic<std::tuple<Args...>> {
+
+  NullStatisticBase(BaseComponent* comp, const std::string& statName,
+                    const std::string& statSubId, Params& statParams)
+    : Statistic<std::tuple<Args...>>(comp, statName, statSubId, statParams)
+  {
+      // Set the Name of this Statistic
+      this->setStatisticTypeName("NULL");
+  }
+
+  void addData_impl(Args... UNUSED(data)) override {}
+};
+
 template <class T>
 struct NullStatisticBase<T,false> : public Statistic<T> {
 
@@ -111,16 +125,15 @@ struct NullStatistic : public NullStatisticBase<T> {
   {
       return true;
   }
+
+  static bool isLoaded() {
+    return loaded_;
+  }
+ private:
+  static bool loaded_;
 };
 
-SST_ELI_INSTANTIATE_STATISTIC(NullStatistic, int32_t, i32);
-SST_ELI_INSTANTIATE_STATISTIC(NullStatistic, uint32_t, u32);
-SST_ELI_INSTANTIATE_STATISTIC(NullStatistic, int64_t, i64);
-SST_ELI_INSTANTIATE_STATISTIC(NullStatistic, uint64_t, u64);
-SST_ELI_INSTANTIATE_STATISTIC(NullStatistic, float, f);
-SST_ELI_INSTANTIATE_STATISTIC(NullStatistic, double, d);
-
-
+template <class T> bool NullStatistic<T>::loaded_ = true;
 
 } //namespace Statistics
 } //namespace SST

@@ -34,15 +34,9 @@ protected:
 
     std::vector<std::pair<std::string,char*> > sub_modules;
 
-    // Only needed for supporting the old ELI
-    SSTElementPythonModule() {}
-    
 public:
     SST_ELI_REGISTER_BASE_DEFAULT(SSTElementPythonModule)
-    SST_ELI_REGISTER_CTORS(
-      ELI_CTOR(const std::string&),
-      ELI_DEFAULT_CTOR()
-    )
+    SST_ELI_REGISTER_CTOR(const std::string&)
 
     virtual ~SSTElementPythonModule() {}
     
@@ -60,8 +54,8 @@ private:
     genPythonModuleFunction func;
     
 public:
-    SSTElementPythonModuleOldELI(genPythonModuleFunction func) :
-        SSTElementPythonModule(),
+    SSTElementPythonModuleOldELI(const std::string& lib, genPythonModuleFunction func) :
+        SSTElementPythonModule(lib),
         func(func)
         {
         }
@@ -77,10 +71,25 @@ template <class T> struct Allocator<SSTElementPythonModule,T> :
 {
 };
 
+template <>
+struct DerivedFactory<SSTElementPythonModule,SSTElementPythonModuleOldELI,const std::string&> :
+  public Factory<SSTElementPythonModule,const std::string&>
+{
+  SSTElementPythonModule* create(const std::string& lib) override {
+    return new SSTElementPythonModuleOldELI(lib, func_);
+  }
+
+  DerivedFactory(genPythonModuleFunction func) :
+    func_(func)
+  {}
+
+  genPythonModuleFunction func_;
+};
+
 }
 }
 
 #define SST_ELI_REGISTER_PYTHON_MODULE(cls,lib,version)    \
-  SST_ELI_REGISTER_DERIVED(SST::SSTElementPythonModule,cls,lib,name,ELI_FORWARD_AS_ONE(version),desc)
+  SST_ELI_REGISTER_DERIVED(SST::SSTElementPythonModule,cls,lib,lib,ELI_FORWARD_AS_ONE(version),desc)
 
 #endif // SST_CORE_MODEL_ELEMENT_PYTHON_H

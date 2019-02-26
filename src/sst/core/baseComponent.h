@@ -273,7 +273,7 @@ public:
                 depending upon runtime settings.
     */
     template <typename T>
-    Statistic<T>* registerStatistic(std::string statName, std::string statSubId = "")
+    Statistic<T>* registerStatistic(SST::Params& params, std::string statName, std::string statSubId = "")
     {
         // Verify here that name of the stat is one of the registered
         // names of the component's ElementInfoStatistic.
@@ -297,8 +297,36 @@ public:
           }
         }
 
-        Statistic<T>* stat = registerStatisticCore<T>(statName, statSubId);
+        Statistic<T>* stat = registerStatisticCore<T>(params, statName, statSubId);
         return stat;
+    }
+
+    template <class... Args>
+    Statistic<std::tuple<Args...>>* registerMultiStatistic(SST::Params& params, const std::string& name, const std::string& subId = ""){
+      return registerStatistic<std::tuple<Args...>>(params, name, subId);
+    }
+
+    template <class Stat>
+    Stat* registerStatisticType(SST::Params& params, const std::string& name, const std::string& subId = ""){
+      using T = typename Stat::Datum;
+      return registerStatistic<T>(params, name, subId);
+    }
+
+    template <typename T>
+    Statistic<T>* registerStatistic(const std::string& statName, const std::string& statSubId = ""){
+      SST::Params empty;
+      return registerStatistic<T>(empty, statName, statSubId);
+    }
+
+    template <class... Args>
+    Statistic<std::tuple<Args...>>* registerMultiStatistic(const std::string& name, const std::string& subId = ""){
+      return registerStatistic<std::tuple<Args...>>(name, subId);
+    }
+
+    template <class Stat>
+    Stat* registerStatisticType(const std::string& name, const std::string& subId = ""){
+      using T = typename Stat::Datum;
+      return registerStatistic<T>(name, subId);
     }
 
     struct StatRegisterConfig {
@@ -320,9 +348,7 @@ public:
                    StatRegisterConfig& cfg);
 
     template <class T> Statistic<T>*
-    registerStatisticCore(const std::string& statName,
-                          const std::string& statSubId){
-
+    registerStatisticCore(SST::Params& parent_params, const std::string& statName, const std::string& statSubId){
         StatisticProcessingEngine      *engine = StatisticProcessingEngine::getInstance();
 
         Statistic<T>*                   statistic = nullptr;
@@ -333,6 +359,8 @@ public:
         BaseComponent *owner = this->getStatisticOwner();
         StatRegisterConfig cfg;
         bool statGood = checkStat(statName, statSubId, cfg);
+        SST::Params params = parent_params.find_prefix_params(statName);
+        cfg.statParams.insert(params);
 
         if (statGood) {
             // Instantiate the Statistic here defined by the type here
@@ -343,14 +371,13 @@ public:
             statistic->setRegisteredCollectionMode(cfg.statCollectionMode);
         }
         /** statGood can get set to false by checkMode supported*/
-        if (!statGood ) {
+        if (!statGood) {
             // Delete the original statistic (if created), and return a NULL statistic instead
             if (nullptr != statistic) {
                 delete statistic;
             }
             // Instantiate the Statistic here defined by the type here
-            statistic = engine->createStatisticType<NullStatistic<T>>(
-                             owner, statName, statSubId, cfg.statParams);
+            statistic = new NullStatistic<T>(owner, statName, statSubId, cfg.statParams);
         }
         engine->registerStatisticWithEngine(statistic, StatisticFieldType<T>::id());
 
@@ -361,7 +388,14 @@ public:
     template <typename T>
     Statistic<T>* registerStatistic(const char* statName, const char* statSubId = "")
     {
-        return registerStatistic<T>(std::string(statName), std::string(statSubId));
+      SST::Params empty;
+      return registerStatistic<T>(empty, std::string(statName), std::string(statSubId));
+    }
+
+    template <typename T>
+    Statistic<T>* registerStatistic(SST::Params& parent_params, const char* statName, const char* statSubId = "")
+    {
+      return registerStatisticCore<T>(parent_params, std::string(statName), std::string(statSubId));
     }
 
 
@@ -449,9 +483,6 @@ protected:
 
 private:
     void addSelfLink(std::string name);
-
-    StatisticBase* registerStatisticCore(FieldId_t id, const std::string& statName,
-                                         const std::string& statSubId = "");
 
 };
 

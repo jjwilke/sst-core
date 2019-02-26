@@ -48,7 +48,8 @@ class StatisticGroup;
 class StatisticOutput : public Module
 {
 public:
-  SST_ELI_REGISTER_BASE_DEFAULT(StatisticOutput)
+  SST_ELI_REGISTER_BASE(StatisticOutput,
+      ELI::ImplementsParamInfo)
   SST_ELI_REGISTER_CTOR(SST::Params&)
 
     using fieldType_t = StatisticFieldInfo::fieldType_t;
@@ -72,7 +73,6 @@ public:
     /** True if this StatOutput can handle StatisticGroups */
     virtual bool acceptsGroups() const { return false; }
 
-
 /////////////////
 // Methods for Registering Fields (Called by Statistic Objects)
 public:
@@ -91,7 +91,7 @@ public:
       StatisticFieldInfo::fieldType_t FieldType =
           StatisticFieldInfo::StatisticFieldInfo::getFieldTypeFromTemplate<T>();
 
-      auto res = generateFileHandle(addFieldToLists(fieldName, FieldType));
+      auto res = generateFieldHandle(addFieldToLists(fieldName, FieldType));
       implRegisteredField(res);
       return res;
     }
@@ -230,7 +230,7 @@ private:
 
     // Other support functions
     StatisticFieldInfo* addFieldToLists(const char* fieldName, fieldType_t fieldType);
-    fieldHandle_t generateFileHandle(StatisticFieldInfo* FieldInfo);
+    fieldHandle_t generateFieldHandle(StatisticFieldInfo* FieldInfo);
 
 
 protected:

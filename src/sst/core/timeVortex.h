@@ -24,7 +24,8 @@ class Output;
  */
 class TimeVortex : public ActivityQueue, public Module {
 public:
-  SST_ELI_REGISTER_BASE_DEFAULT(TimeVortex)
+  SST_ELI_REGISTER_BASE(TimeVortex,
+    ELI::ImplementsParamInfo)
   SST_ELI_REGISTER_CTOR(SST::Params&)
 
 	TimeVortex() {

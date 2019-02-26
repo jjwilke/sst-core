@@ -40,7 +40,7 @@ namespace Partition {
     class SSTPartitioner;
 }
 namespace Statistics {
-  template <class T, class... CtorArgs> class Statistic;
+  template <class T> class Statistic;
   class StatisticBase;
 }
 class RankInfo;
@@ -137,15 +137,22 @@ struct InstantiateInfo {
 class DataBase {
  public:
   static void addLoaded(const std::string& name){
-    loaded_.insert(name);
+    if (!loaded_){
+      loaded_ = std::unique_ptr<std::set<std::string>>(new std::set<std::string>);
+    }
+    loaded_->insert(name);
   }
 
   static bool isLoaded(const std::string& name){
-    return loaded_.find(name) != loaded_.end();
+    if (loaded_){
+      return loaded_->find(name) != loaded_->end();
+    } else {
+      return false; //nothing loaded yet
+    }
   }
 
  private:
-  static std::set<std::string> loaded_;
+  static std::unique_ptr<std::set<std::string>> loaded_;
 };
 
 template <class Base> class InfoLibrary
@@ -277,7 +284,7 @@ constexpr unsigned SST_ELI_getTertiaryNumberFromVersion(SST_ELI_element_version_
   using FactoryLibrary = ::SST::ELI::FactoryLibrary<Base,__Args...>; \
   using InfoLibrary = ::SST::ELI::InfoLibrary<Base>; \
   template <class __TT> \
-  using InfoInstance = ::SST::ELI::DerivedFactoryInfo<Base,__TT>; \
+  using DerivedInfo = ::SST::ELI::DerivedFactoryInfo<Base,__TT>; \
   static InfoLibrary* getInfoLibrary(const std::string& name){ \
     return SST::ELI::InfoDatabase::getLibrary<Base>(name); \
   } \

@@ -66,22 +66,22 @@ void StatisticOutput::stopRegisterFields()
 
 StatisticFieldInfo* StatisticOutput::addFieldToLists(const char* fieldName, fieldType_t fieldType)
 {
-    StatisticFieldInfo* NewStatFieldInfo;
-    StatisticFieldInfo* ExistingStatFieldInfo;
 
-    // Create a new Instance of a StatisticFieldInfo
-    NewStatFieldInfo = new StatisticFieldInfo(m_currentFieldStatName.c_str(), fieldName, fieldType);
-    
-    // Now search the FieldNameMap_t of type for a matching entry
-    FieldNameMap_t::const_iterator found = m_outputFieldNameMap.find(NewStatFieldInfo->getFieldUniqueName());
-    if (found != m_outputFieldNameMap.end()) {
-        // We found a map entry, now get the StatFieldInfo from the m_outputFieldInfoArray at the index given by the map
-        // and then delete the NewStatFieldInfo to prevent a leak
-        ExistingStatFieldInfo = m_outputFieldInfoArray[found->second];
-        delete NewStatFieldInfo;
-        return ExistingStatFieldInfo;
+    auto iter = m_outputFieldNameMap.find(fieldName);
+    if (iter != m_outputFieldNameMap.end()){
+      fieldHandle_t id = iter->second;
+      StatisticFieldInfo* ExistingStatFieldInfo = m_outputFieldInfoArray[id];
+      if (ExistingStatFieldInfo->getFieldType() != fieldType){
+        Simulation::getSimulationOutput().fatal(CALL_INFO, 1,
+            "StatisticOutput %s registering the same column (%s) with two different types",
+            getStatisticOutputName().c_str(), fieldName);
+      }
+      return ExistingStatFieldInfo;
     }
 
+
+    // Create a new Instance of a StatisticFieldInfo
+    StatisticFieldInfo* NewStatFieldInfo = new StatisticFieldInfo(m_currentFieldStatName.c_str(), fieldName, fieldType);
     // If we get here, then the New StatFieldInfo does not exist so add it to both
     // the Array and to the map
     m_outputFieldInfoArray.push_back(NewStatFieldInfo);
@@ -90,7 +90,7 @@ StatisticFieldInfo* StatisticOutput::addFieldToLists(const char* fieldName, fiel
     return NewStatFieldInfo;
 }
 
-StatisticOutput::fieldHandle_t StatisticOutput::generateFileHandle(StatisticFieldInfo* FieldInfo)
+StatisticOutput::fieldHandle_t StatisticOutput::generateFieldHandle(StatisticFieldInfo* FieldInfo)
 {
     // Check to see if this field info has a handle assigned
     if (-1 == FieldInfo->getFieldHandle()) {

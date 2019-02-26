@@ -70,21 +70,13 @@ public:
      */
     void performGlobalStatisticOutput(bool endOfSimFlag = false);
 
-    template<typename T>
-    T* createStatisticType(BaseComponent *comp, const std::string &statName,
-                                      const std::string &statSubId, Params &params)
-    {
-      return new T(comp, statName, statSubId, params);
-    }
-
-    template<typename T, class... Args>
+    template <class T>
     Statistic<T>* createStatistic(BaseComponent *comp, const std::string &type,
                                   const std::string &statName, const std::string &statSubId,
-                                  Params &params, Args... args)
+                                  Params &params)
     {
 
-      return Factory::getFactory()->CreateStatistic<T,Args...>(
-            type, comp, statName, statSubId, params, std::forward<Args>(args)...);
+      return Factory::getFactory()->Create<Statistic<T>>(type, params, comp, statName, statSubId, params);
     }
 
     bool registerStatisticWithEngine(StatisticBase* stat, FieldId_t id)

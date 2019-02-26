@@ -317,13 +317,14 @@ struct StatisticCollector<std::tuple<Args...>,false> {
 	@tparam T A template for the basic numerical data stored by this Statistic
 */
 
-template <typename T, class... ExtraCtorArgs>
+template <typename T>
 class Statistic : public StatisticBase, public StatisticCollector<T>
 {
  public:
-  SST_ELI_REGISTER_BASE(Statistic,ELI::ImplementsInterface)
-  SST_ELI_REGISTER_CTOR(BaseComponent*,const std::string&, const std::string&, SST::Params&,
-                        ExtraCtorArgs...)
+  SST_ELI_REGISTER_BASE(Statistic,
+    ELI::ImplementsInterface,
+    ELI::ImplementsParamInfo)
+  SST_ELI_REGISTER_CTOR(BaseComponent*,const std::string&, const std::string&, SST::Params&)
 
     using Datum = T;
     using StatisticCollector<T>::addData_impl;
@@ -370,12 +371,6 @@ private:
     Statistic(){} // For serialization only
 
 
-};
-
-template <class... CtorArgs>
-struct MultiCtor {
-  template <class... StatArgs> using Statistic =
-    ::SST::Statistics::Statistic<std::tuple<StatArgs...>, CtorArgs...>;
 };
 
 template <class... Args>
@@ -440,41 +435,79 @@ struct ImplementsStatFields {
 
 #define SST_ELI_INSTANTIATE_STATISTIC(cls,field,shortName) \
   struct cls##_##field##_##shortName : public cls<field> { \
-    template <class... InArgs> \
     cls##_##field##_##shortName(SST::BaseComponent* bc, const std::string& sn, \
-           const std::string& si, SST::Params& p, InArgs&&... ctorArgs) : \
-      cls<field>(bc,sn,si,p,std::forward<InArgs>(ctorArgs)...) {} \
+           const std::string& si, SST::Params& p) : \
+      cls<field>(bc,sn,si,p) {} \
     bool ELI_isLoaded() const { \
      return SST::ELI::InstantiateInfo< \
         SST::Statistics::Statistic<field>, \
         cls##_##field##_##shortName>::isLoaded() \
          && SST::ELI::InstantiateFactory< \
         SST::Statistics::Statistic<field>, \
-        cls##_##field##_##shortName>::isLoaded(); \
+        cls##_##field##_##shortName>::isLoaded() \
+         && SST::ELI::InstantiateInfo< \
+        SST::Statistics::Statistic<field>, \
+        SST::Statistics::NullStatistic<field>>::isLoaded() \
+         && SST::ELI::InstantiateFactory< \
+        SST::Statistics::Statistic<field>, \
+        SST::Statistics::NullStatistic<field>>::isLoaded(); \
     } \
     static const char* ELI_fieldName(){ return #field; } \
     static const char* ELI_fieldShortName(){ return #shortName; } \
-    static FieldId_t ELI_registerField(const char* name, const char* shortName){ \
-      return StatisticFieldType<field>::registerField(name, shortName); \
+    static FieldId_t ELI_registerField(const char* name, const char* shortNameStr){ \
+      return StatisticFieldType<field>::registerField(name, shortNameStr); \
     } \
-  }
+  };
+
+#define PP_NARG(...) PP_NARG_(__VA_ARGS__, PP_NSEQ())
+#define PP_NARG_(...) PP_ARG_N(__VA_ARGS__)
+#define PP_ARG_N(_1,_2,_3,_4,_5,N,...) N
+#define PP_NSEQ() 5,4,3,2,1,0
+
+#define PP_GLUE(X,Y) PP_GLUE_I(X,Y)
+#define PP_GLUE_I(X,Y) X##Y
+
+#define STAT_NAME1(base,a) base##a
+#define STAT_NAME2(base,a,b) base##a##b
+#define STAT_NAME3(base,a,b,c) base##a##b##c
+#define STAT_NAME4(base,a,b,c,d) base##a##b##c##d
+
+#define STAT_GLUE_NAME(base,...) PP_GLUE(STAT_NAME,PP_NARG(__VA_ARGS__))(base,__VA_ARGS__)
+#define STAT_TUPLE(...) std::tuple<__VA_ARGS__>
+
+#define MAKE_MULTI_STATISTIC(cls,name,tuple,...) \
+  struct name : public cls<__VA_ARGS__> { \
+    name(SST::BaseComponent* bc, const std::string& sn, \
+         const std::string& si, SST::Params& p) : \
+      cls<__VA_ARGS__>(bc,sn,si,p) {} \
+    bool ELI_isLoaded() const { \
+     return SST::ELI::InstantiateInfo< \
+        SST::Statistics::Statistic<tuple>,name>::isLoaded() \
+         && SST::ELI::InstantiateFactory< \
+        SST::Statistics::Statistic<tuple>,name>::isLoaded() \
+         && SST::ELI::InstantiateInfo< \
+        SST::Statistics::Statistic<tuple>, \
+        SST::Statistics::NullStatistic<tuple>>::isLoaded() \
+         && SST::ELI::InstantiateFactory< \
+        SST::Statistics::Statistic<tuple>, \
+        SST::Statistics::NullStatistic<tuple>>::isLoaded(); \
+    } \
+    static const char* ELI_fieldName(){ return #tuple; } \
+    static const char* ELI_fieldShortName(){ return #tuple; } \
+    static FieldId_t ELI_registerField(const char* name, const char* shortNameStr){ \
+      return StatisticFieldType<tuple>::registerField(name, shortNameStr); \
+    } \
+  };
+
+#define SST_ELI_INSTANTIATE_MULTI_STATISTIC(cls,...) \
+  MAKE_MULTI_STATISTIC(cls,STAT_GLUE_NAME(cls,__VA_ARGS__),STAT_TUPLE(__VA_ARGS__),__VA_ARGS__)
+
+
 
 } //namespace Statistics
-
-/**
-namespace ELI {
-template <class T> using StatFactoryParent
-  = ELI::FactoryInfo<Statistics::Statistic<T>,ImplementsInterface,Statistics::ImplementsStatFields,void>;
-
-template <class T> struct FactoryInfo<Statistics::Statistic<T>> :
- public StatFactoryParent<T>
-{
-  template <class... Args> FactoryInfo(Args&&... args)
-   : StatFactoryParent<T>(std::forward<Args>(args)...) {}
-};
-} //namespace ELI
-*/
-
 } //namespace SST
+
+//we need to make sure null stats are instantiated for whatever types we use
+#include <sst/core/statapi/statnull.h>
 
 #endif

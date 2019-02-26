@@ -3,6 +3,7 @@
 #define SST_CORE_FACTORY_INFO_H
 
 #include <oldELI.h>
+#include <type_traits>
 
 namespace SST {
 namespace ELI {
@@ -173,15 +174,16 @@ template <class Base, class Ctor, class... Ctors>
 struct CtorList : public CtorList<Base,Ctors...>
 {
   template <int NumValid, class T, class U=T>
-  static typename std::enable_if<is_tuple_constructible<U,Ctor>::value, bool>::type
+  static typename std::enable_if<std::is_abstract<U>::value || is_tuple_constructible<U,Ctor>::value, bool>::type
   add(){
+    //if abstract, force an allocation to generate meaningful errors
     auto* fact = ElementsFactory<Base,Ctor>::template makeFactory<U>();
     ElementsFactory<Base,Ctor>::getLibrary(T::ELI_getLibrary())->addFactory(T::ELI_getName(), fact);
     return CtorList<Base,Ctors...>::template add<NumValid+1,T>();
   }
 
   template <int NumValid, class T, class U=T>
-  static typename std::enable_if<!is_tuple_constructible<U,Ctor>::value, bool>::type
+  static typename std::enable_if<!std::is_abstract<U>::value && !is_tuple_constructible<U,Ctor>::value, bool>::type
   add(){
     return CtorList<Base,Ctors...>::template add<NumValid,T>();
   }

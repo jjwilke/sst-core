@@ -217,7 +217,8 @@ void StatisticProcessingEngine::endOfSimulation()
 
 StatisticOutput* StatisticProcessingEngine::createStatisticOutput(const ConfigStatOutput &cfg)
 {
-    StatisticOutput *so = Factory::getFactory()->CreateStatisticOutput(cfg.type, cfg.params);
+  auto& unsafeParams = const_cast<SST::Params&>(cfg.params);
+    StatisticOutput *so = Factory::getFactory()->Create<StatisticOutput>(cfg.type, unsafeParams, unsafeParams);
     if (NULL == so) {
         m_output.fatal(CALL_INFO, -1, " - Unable to instantiate Statistic Output %s\n", cfg.type.c_str());
     }
