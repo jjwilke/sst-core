@@ -22,7 +22,7 @@
 #include <sst/core/element.h>
 #include <sst/core/elementinfo.h>
 #include <sst/core/statapi/statbase.h>
-#include <sst/core/model/element_python.h>
+//#include <sst/core/model/element_python.h>
 #include <sst/core/statapi/statfieldinfo.h>
 
 /* Forward declare for Friendship */
@@ -81,10 +81,16 @@ public:
       if (lib){
         auto* info = lib->getInfo(elem);
         if (info){
-          params.pushAllowedKeys(info->getParamNames());
-          T* ret = T::create(elemlib,elem,std::forward<Args>(args)...);
-          params.popAllowedKeys();
-          return ret;
+          auto* builderLib = T::getBuilderLibrary(elemlib);
+          if (builderLib){
+            auto* fact = builderLib->getBuilder(elem);
+            if (fact){
+              params.pushAllowedKeys(info->getParamNames());
+              T* ret = fact->create(std::forward<Args>(args)...);
+              params.popAllowedKeys();
+              return ret;
+            }
+          }
         }
       }
 
@@ -123,7 +129,7 @@ public:
       // ensure library is already loaded...
       requireLibrary(elemlib);
 
-      auto* lib = ELI::FactoryDatabase::getLibrary<Statistics::Statistic<T>, Args...>(elemlib);
+      auto* lib = ELI::BuilderDatabase::getLibrary<Statistics::Statistic<T>, Args...>(elemlib);
       if (lib){
         auto* fact = lib->getFactory(elem);
         if (fact){

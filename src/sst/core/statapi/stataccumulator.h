@@ -47,7 +47,7 @@ template <typename NumberBase>
 class AccumulatorStatistic : public Statistic<NumberBase> 
 {
 public:
-  SST_ELI_REGISTER_STATISTIC_TEMPLATE(
+  SST_ELI_DECLARE_STATISTIC_TEMPLATE(
       AccumulatorStatistic,
       "sst",
       "AccumulatorStatistic",
@@ -213,13 +213,6 @@ private:
     StatisticOutput::fieldHandle_t h_max;
     StatisticOutput::fieldHandle_t h_min;
 };
-
-SST_ELI_INSTANTIATE_STATISTIC(AccumulatorStatistic, int32_t, i32);
-SST_ELI_INSTANTIATE_STATISTIC(AccumulatorStatistic, uint32_t, u32);
-SST_ELI_INSTANTIATE_STATISTIC(AccumulatorStatistic, int64_t, i64);
-SST_ELI_INSTANTIATE_STATISTIC(AccumulatorStatistic, uint64_t, u64);
-SST_ELI_INSTANTIATE_STATISTIC(AccumulatorStatistic, float, f);
-SST_ELI_INSTANTIATE_STATISTIC(AccumulatorStatistic, double, d);
 
 
 } //namespace Statistics

@@ -32,13 +32,14 @@ namespace SST {
 */
 class SubComponent : public Module, public BaseComponent {
  public:
-  SST_ELI_REGISTER_BASE(SubComponent,
-    ELI::ImplementsParamInfo,
-    ELI::ImplementsPortsInfo,
-    ELI::ImplementsStatsInfo,
-    ELI::ImplementsInterface,
-    ELI::ImplementsSubComponentInfo)
-  SST_ELI_REGISTER_CTOR(Component*,SST::Params&)
+  SST_ELI_DECLARE_BASE(SubComponent)
+  SST_ELI_DECLARE_CTOR_EXTERN(Component*,SST::Params&)
+  using BaseComponent::addDerivedInfo;
+
+  void addDerivedBuilder(const std::string& elemlib, const std::string& elem,
+                         BaseBuilder* builder);
+
+  using BaseComponent::BuilderInfo;
 
 	SubComponent(Component* parent) : BaseComponent(), parent(parent) {
         my_info = parent->currentlyLoadingSubComponent;

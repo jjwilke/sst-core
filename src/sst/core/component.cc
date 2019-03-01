@@ -32,7 +32,11 @@ Component::~Component()
 {
 }
 
-
+Component::BuilderLibrary*
+Component::getBuilderLibrary(const std::string &name)
+{
+  return ELI::BuilderDatabase::getLibrary<Component,ComponentId_t,Params&>(name);
+}
 
 bool Component::registerExit()
 {

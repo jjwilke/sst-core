@@ -26,6 +26,7 @@
 #include <sst/core/elementinfo.h>
 #include "sst/core/params.h"
 #include "sst/core/linkMap.h"
+#include <sst/core/model/element_python.h>
 
 // Statistic Output Objects
 #include <sst/core/statapi/statoutputconsole.h>
@@ -123,12 +124,21 @@ bool Factory::isPortNameValid(const std::string &type, const std::string port_na
 
     const std::vector<std::string> *portNames = NULL;
 
-    auto* compInfo = Component::getInfo(elemlib,elem);
-    if (compInfo) {
-      portNames = &compInfo->getPortnames();
+    auto* lib = ELI::InfoDatabase::getLibrary<Component>(elemlib);
+    if (lib) {
+      auto* compInfo = lib->getInfo(elem); //Component::getInfo(elemlib,elem);
+      if (compInfo){
+        portNames = &compInfo->getPortnames();
+      }
     } else {
-      auto* subcompInfo = SubComponent::getInfo(elemlib,elem);
-      if (subcompInfo) portNames = &subcompInfo->getPortnames();
+      auto* lib = ELI::InfoDatabase::getLibrary<SubComponent>(elemlib);
+      if (lib){
+        auto* subcompInfo = lib->getInfo(elemlib);
+        if (subcompInfo){
+          portNames = &subcompInfo->getPortnames();
+
+        }
+      }
     }
 
     std::string tmp = elemlib + "." + elem;
@@ -145,7 +155,6 @@ bool Factory::isPortNameValid(const std::string &type, const std::string port_na
     return false;
 }
 
-
 Component*
 Factory::CreateComponent(ComponentId_t id, 
                          const std::string &type,
@@ -159,18 +168,27 @@ Factory::CreateComponent(ComponentId_t id,
     requireLibrary(elemlib);
 
     std::lock_guard<std::recursive_mutex> lock(factoryMutex);
-    auto* compInfo = Component::getInfo(elemlib,elem);
-    if (compInfo) {
-      LinkMap *lm = Simulation::getSimulation()->getComponentLinkMap(id);
-      lm->setAllowedPorts(&(compInfo->getPortnames()));
-
-      loadingComponentType = type;
-      params.pushAllowedKeys(compInfo->getParamNames());
-      Component *ret = Component::create(elemlib,elem,id,params);
-      params.popAllowedKeys();
-      loadingComponentType = "";
-      return ret;
+    auto* lib = ELI::InfoDatabase::getLibrary<Component>(elemlib);
+    if (lib){
+      auto* compInfo = lib->getInfo(elem);
+      if (compInfo) {
+        auto* compLib = Component::getBuilderLibrary(elemlib);
+        if (compLib){
+          auto* fact = compLib->getBuilder(elem);
+          if (fact){
+            LinkMap *lm = Simulation::getSimulation()->getComponentLinkMap(id);
+            lm->setAllowedPorts(&(compInfo->getPortnames()));
+            loadingComponentType = type;
+            params.pushAllowedKeys(compInfo->getParamNames());
+            Component* ret = fact->create(id,params);
+            params.popAllowedKeys();
+            loadingComponentType = "";
+            return ret;
+          }
+        }
+      }
     }
+
 
     // If we make it to here, component not found
     out.fatal(CALL_INFO, -1,"can't find requested component %s.\n ", type.c_str());
@@ -397,15 +415,21 @@ Factory::CreateModule(const std::string& type, Params& params)
     if (lib){
       auto* info = lib->getInfo(elem);
       if (info){
-        params.pushAllowedKeys(info->getParamNames());
-        Module *ret = Module::create(elemlib,elem,params);
-        params.popAllowedKeys();
-        return ret;
+        auto* builderLib = Module::getBuilderLibraryTemplate<Params&>(elemlib);
+        if (builderLib){
+          auto* fact = builderLib->getBuilder(elem);
+          if (fact){
+            params.pushAllowedKeys(info->getParamNames());
+            Module* ret = fact->create(params);
+            params.popAllowedKeys();
+            return ret;
+          }
+        }
       }
     }
     
     // If we get to here, element doesn't exist
-    out.fatal(CALL_INFO, -1, "can't find requested module %s.\n ", type.c_str());
+    out.fatal(CALL_INFO, -1, "can't find requested module %s with ctor(Params&)\n ", type.c_str());
     return NULL;
 }
 
@@ -431,15 +455,21 @@ Factory::CreateModuleWithComponent(const std::string& type, Component* comp, Par
     if (lib){
       auto* info = lib->getInfo(elem);
       if (info){
-        params.pushAllowedKeys(info->getParamNames());
-        Module *ret = Module::create(elemlib,elem,comp,params);
-        params.popAllowedKeys();
-        return ret;
+        auto* builderLib = Module::getBuilderLibraryTemplate<Component*,Params&>(elemlib);
+        if (builderLib){
+          auto* fact = builderLib->getBuilder(elem);
+          if (fact){
+            params.pushAllowedKeys(info->getParamNames());
+            Module* ret = fact->create(comp,params);
+            params.popAllowedKeys();
+            return ret;
+          }
+        }
       }
     }
 
     // If we get to here, element doesn't exist
-    out.fatal(CALL_INFO, -1,"can't find requested module %s.\n ", type.c_str());
+    out.fatal(CALL_INFO, -1,"can't find requested module %s with ctor(Component*,Params&)\n ", type.c_str());
     return NULL;
 }
 
@@ -462,15 +492,21 @@ Factory::CreateSubComponent(const std::string& type, Component* comp, Params& pa
     if (lib){
       auto* info = lib->getInfo(elem);
       if (info){
-        params.pushAllowedKeys(info->getParamNames());
-        SubComponent* ret = SubComponent::create(elemlib, elem, comp, params);
-        params.popAllowedKeys();
-        return ret;
+        auto* builderLib = SubComponent::getBuilderLibrary(elemlib);
+        if (builderLib){
+          auto* fact = builderLib->getBuilder(elem);
+          if (fact){
+            params.pushAllowedKeys(info->getParamNames());
+            SubComponent* ret = fact->create(comp,params);
+            params.popAllowedKeys();
+            return ret;
+          }
+        }
       }
     }
 
     // If we get to here, element doesn't exist
-    out.fatal(CALL_INFO, -1,"can't find requested subcomponent %s.\n ", type.c_str());
+    out.fatal(CALL_INFO, -1,"can't find requested subcomponent %s\n ", type.c_str());
     return NULL;
 }
 
@@ -510,7 +546,13 @@ Factory::CreatePartitioner(std::string name, RankInfo total_ranks, RankInfo my_r
     if (lib){
       auto* info = lib->getInfo(elem);
       if (info){
-        return Partition::SSTPartitioner::create(elemlib, elem, total_ranks, my_rank, verbosity);
+        auto* builderLib = Partition::SSTPartitioner::getBuilderLibrary(elemlib);
+        if (builderLib){
+          auto* fact = builderLib->getBuilder(elem);
+          if (fact){
+            return fact->create(total_ranks, my_rank, verbosity);
+          }
+        }
       }
     }
 
@@ -554,15 +596,18 @@ Factory::getPythonModule(std::string name)
     if (lib) {
       auto* info = lib->getInfo(elem);
       if (info){
-        //this looks funny with name passed 3 times
-        //first is library
-        //derived name is always also the library
-        //and finally the libname needs to be passed as an arg to ctor
-        return SSTElementPythonModule::create(elemlib,elemlib,elemlib);
+        auto* builderLib = SSTElementPythonModule::getBuilderLibrary(elemlib);
+        if (builderLib){
+          auto* fact = builderLib->getBuilder(elemlib);
+          if (fact){
+            auto* ret = fact->create(elemlib);
+            return ret;
+          }
+        }
       }
     }
 
-    return NULL;
+    return nullptr;
 }
 
 
@@ -620,34 +665,36 @@ Factory::findLibrary(std::string elemlib, bool showErrors)
     // structures
     loaded_libraries[elemlib] = eli;
 
+    OldELITag tag{elemlib};
+
     if (NULL != eli->components) { //use NULL I guess for C?
       const auto *eic = eli->components;
-      auto* infolib = Component::getInfoLibrary(elemlib);
-      auto* factlib = Component::getFactoryLibrary(elemlib);
+      auto* infolib = ELI::InfoDatabase::getLibrary<Component>(elemlib);
+      auto* factlib = Component::getBuilderLibrary(elemlib);
       while (NULL != eic->name) {
-        factlib->addFactory(eic->name, new Component::DerivedFactory<OldELITag>(eic->alloc));
-        infolib->addInfo(new Component::DerivedInfo<OldELITag>(elemlib,eic));
+        factlib->addBuilder(eic->name, new Component::DerivedBuilder<OldELITag>(eic->alloc));
+        infolib->addInfo(eic->name,new Component::BuilderInfo(elemlib,eic->name,tag,eic));
       }
     }
 
     if (NULL != eli->subcomponents) { //use NULL I guess for C?
       const auto *eis = eli->subcomponents;
-      auto* infolib = SubComponent::getInfoLibrary(elemlib);
-      auto* factlib = SubComponent::getFactoryLibrary(elemlib);
+      auto* infolib = ELI::InfoDatabase::getLibrary<SubComponent>(elemlib);
+      auto* factlib = SubComponent::getBuilderLibrary(elemlib);
       while (NULL != eis->name) {
-        factlib->addFactory(eis->name, new SubComponent::DerivedFactory<OldELITag>(eis->alloc));
-        infolib->addInfo(new SubComponent::DerivedInfo<OldELITag>(elemlib, eis));
+        factlib->addBuilder(eis->name, new SubComponent::DerivedBuilder<OldELITag>(eis->alloc));
+        infolib->addInfo(eis->name,new SubComponent::BuilderInfo(elemlib,eis->name,tag,eis));
         eis++;
       }
     }
 
     if (NULL != eli->partitioners) { //use NULL I guess for C?
       const auto *eis = eli->partitioners;
-      auto* infolib = Partition::SSTPartitioner::getInfoLibrary(elemlib);
-      auto* factlib = Partition::SSTPartitioner::getFactoryLibrary(elemlib);
+      auto* infolib = ELI::InfoDatabase::getLibrary<Partition::SSTPartitioner>(elemlib);
+      auto* factlib = Partition::SSTPartitioner::getBuilderLibrary(elemlib);
       while (NULL != eis->name) {
-        factlib->addFactory(eis->name, new Partition::SSTPartitioner::DerivedFactory<OldELITag>(eis->func));
-        infolib->addInfo(new Partition::SSTPartitioner::DerivedInfo<OldELITag>(elemlib, eis));
+        factlib->addBuilder(eis->name, new Partition::SSTPartitioner::DerivedBuilder<OldELITag>(eis->func));
+        infolib->addInfo(eis->name, new Partition::SSTPartitioner::BuilderInfo(elemlib,eis->name,tag,eis));
         eis++;
       }
     }
@@ -655,18 +702,18 @@ Factory::findLibrary(std::string elemlib, bool showErrors)
 
     if (NULL != eli->modules) {
       const ElementInfoModule *eim = eli->modules;
-      auto* infolib = Module::getInfoLibrary(elemlib);
-      auto* withlib = Module::getFactoryLibrary<Component*,SST::Params&>(elemlib);
-      auto* wolib = Module::getFactoryLibrary<SST::Params&>(elemlib);
+      auto* infolib = ELI::InfoDatabase::getLibrary<Module>(elemlib);
+      auto* withlib = ELI::BuilderDatabase::getLibrary<Module,Component*,SST::Params&>(elemlib);
+      auto* wolib = ELI::BuilderDatabase::getLibrary<Module,SST::Params&>(elemlib);
       while (NULL != eim->name) {
-        auto* info = new Module::DerivedInfo<OldELITag>(elemlib, eim);
-        infolib->addInfo(info);
+        auto* info = new Module::BuilderInfo(elemlib,eim->name,tag,eim);
+        infolib->addInfo(eim->name,info);
 
-        auto* withComp = new Module::DerivedFactory<OldELITag,Component*,SST::Params&>(eim->alloc_with_comp);
-        withlib->addFactory(eim->name, withComp);
+        auto* withComp = new Module::DerivedBuilder<OldELITag,Component*,SST::Params&>(eim->alloc_with_comp);
+        withlib->addBuilder(eim->name, withComp);
 
-        auto* withoutComp = new Module::DerivedFactory<OldELITag,SST::Params&>(eim->alloc);
-        wolib->addFactory(eim->name, withoutComp);
+        auto* withoutComp = new Module::DerivedBuilder<OldELITag,SST::Params&>(eim->alloc);
+        wolib->addBuilder(eim->name, withoutComp);
         eim++;
       }
     }
@@ -682,13 +729,13 @@ Factory::findLibrary(std::string elemlib, bool showErrors)
     }
 
     if (NULL != eli->pythonModuleGenerator ) {
-      auto* factLib = SSTElementPythonModule::getFactoryLibrary(elemlib);
-      auto* fact = new SSTElementPythonModule::DerivedFactory<SSTElementPythonModuleOldELI>(eli->pythonModuleGenerator);
-      factLib->addFactory(elemlib, fact);
+      auto* factLib = SSTElementPythonModule::getBuilderLibrary(elemlib);
+      auto* fact = new SSTElementPythonModule::DerivedBuilder<SSTElementPythonModuleOldELI>(eli->pythonModuleGenerator);
+      factLib->addBuilder(elemlib, fact);
 
-      auto* infoLib = SSTElementPythonModule::getInfoLibrary(elemlib);
-      auto* info = new SSTElementPythonModule::DerivedInfo<OldELITag>(elemlib, eli);
-      infoLib->addInfo(info);
+      auto* infoLib = ELI::InfoDatabase::getLibrary<SSTElementPythonModule>(elemlib);
+      auto* info = new SSTElementPythonModule::BuilderInfo(elemlib,elemlib,tag,eli);
+      infoLib->addInfo(elemlib,info);
     }
     
     return eli;
@@ -717,7 +764,7 @@ const ElementLibraryInfo* Factory::loadLibrary(std::string name, bool showErrors
     if ( NULL == eli ) {
         // Check to see if this library loaded into the new ELI
         // Database
-        if (ELI::DataBase::isLoaded(name)) {
+        if (ELI::LoadedLibraries::isLoaded(name)) {
             // Need to just return the empty ElementLibraryInfo
             return &empty_eli;
         }

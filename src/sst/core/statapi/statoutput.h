@@ -48,9 +48,9 @@ class StatisticGroup;
 class StatisticOutput : public Module
 {
 public:
-  SST_ELI_REGISTER_BASE(StatisticOutput,
-      ELI::ImplementsParamInfo)
-  SST_ELI_REGISTER_CTOR(SST::Params&)
+  SST_ELI_DECLARE_BASE(StatisticOutput)
+  SST_ELI_DECLARE_INFO(ELI::ProvidesParams)
+  SST_ELI_DECLARE_CTOR(SST::Params&)
 
     using fieldType_t = StatisticFieldInfo::fieldType_t;
     using fieldHandle_t = StatisticFieldInfo::fieldHandle_t;
@@ -94,6 +94,12 @@ public:
       auto res = generateFieldHandle(addFieldToLists(fieldName, FieldType));
       implRegisteredField(res);
       return res;
+    }
+
+    //by default, no params to return
+    static const std::vector<SST::ElementInfoParam>& ELI_getParams() {
+        static std::vector<SST::ElementInfoParam> var{};
+        return var;
     }
 
 //    /** Adjust the hierarchy of the fields (FUTURE SUPPORT)

@@ -10,6 +10,7 @@
 namespace SST {
 namespace ELI {
 
+
 template <class T, class Enable=void>
 struct InfoPorts {
   static const std::vector<SST::ElementInfoPort2>& get() {
@@ -26,7 +27,8 @@ struct InfoPorts<T,
   }
 };
 
-class ImplementsPortsInfo {
+
+class ProvidesPorts {
  public:
   const std::vector<std::string>& getPortnames() { return portnames; }
   const std::vector<ElementInfoPort2>& getValidPorts() const {
@@ -53,13 +55,13 @@ class ImplementsPortsInfo {
   }
 
  protected:
-  template <class T> ImplementsPortsInfo(T* UNUSED(t)) :
+  template <class T> ProvidesPorts(T* UNUSED(t)) :
     ports_(InfoPorts<T>::get())
   {
     init();
   }
 
-  template <class U> ImplementsPortsInfo(OldELITag& UNUSED(tag), U* u)
+  template <class U> ProvidesPorts(OldELITag& UNUSED(tag), U* u)
   {
     auto* po = u->ports;
     while ( NULL != po && NULL != po->name ) {
@@ -70,11 +72,7 @@ class ImplementsPortsInfo {
   }
 
  private:
-  void init(){
-    for (auto& item : ports_) {
-      portnames.push_back(item.name);
-    }
-  }
+  void init();
 
   std::vector<std::string> portnames;
   std::vector<ElementInfoPort2> ports_;

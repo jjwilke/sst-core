@@ -7,7 +7,7 @@
 namespace SST {
 namespace ELI {
 
-class DefaultFactoryInfo {
+class ProvidesDefaultInfo {
   friend class ModuleDocOldEli;
  public:
   const std::string getLibrary() const {
@@ -41,29 +41,41 @@ class DefaultFactoryInfo {
     node->SetAttribute("Description", getDescription().c_str());
   }
 
- protected:
-  template <class T> DefaultFactoryInfo(T* UNUSED(t)) :
-   lib_(T::ELI_getLibrary()),
-   name_(T::ELI_getName()),
-   desc_(T::ELI_getDescription()),
-   version_(T::ELI_getVersion()),
-   file_(T::ELI_getCompileFile()),
-   date_(T::ELI_getCompileDate()),
-   compiled_(T::ELI_getELICompiledVersion())
-  {
-  }
-
-  template <class U> DefaultFactoryInfo(OldELITag&& tag, U* u) :
-    DefaultFactoryInfo(tag,u)
-  {
-  }
-
-  template <class U> DefaultFactoryInfo(OldELITag& tag, U* u) :
-    lib_(tag.lib),
-    name_(u->name),
+  template <class U> ProvidesDefaultInfo(const std::string& lib, const std::string& name,
+                                         OldELITag& UNUSED(tag), U* u) :
+    lib_(lib),
+    name_(name),
     desc_(u->description),
     file_("UNKNOWN"),
     date_("UNKNOWN")
+  {
+  }
+
+  template <class T> ProvidesDefaultInfo(const std::string& lib,
+                                         const std::string& name,
+                                         T* UNUSED(t)) :
+    lib_(lib), name_(name),
+    desc_(T::ELI_getDescription()),
+    version_(T::ELI_getVersion()),
+    file_(T::ELI_getCompileFile()),
+    date_(T::ELI_getCompileDate()),
+    compiled_(T::ELI_getELICompiledVersion())
+  {
+  }
+
+ protected:
+  template <class T> ProvidesDefaultInfo(T* t) :
+   ProvidesDefaultInfo(T::ELI_getLibrary(), T::ELI_getName(), t)
+  {
+  }
+
+  template <class U> ProvidesDefaultInfo(OldELITag&& tag, U* u) :
+    ProvidesDefaultInfo(tag,u)
+  {
+  }
+
+  template <class U> ProvidesDefaultInfo(OldELITag& tag, U* u) :
+    ProvidesDefaultInfo(tag.lib, u->name, tag, u)
   {
   }
 
@@ -122,8 +134,6 @@ class DefaultFactoryInfo {
   }
 
 #define SST_ELI_ELEMENT_VERSION(...) {__VA_ARGS__}
-
-#define ELI_FORWARD_AS_ONE(...) __VA_ARGS__
 
 #endif
 

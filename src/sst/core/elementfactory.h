@@ -9,7 +9,7 @@ namespace SST {
 namespace ELI {
 
 template <class Base, class... Args>
-struct Factory
+struct Builder
 {
   typedef Base* (*createFxn)(Args...);
 
@@ -17,12 +17,12 @@ struct Factory
 };
 
 template <class Base, class... CtorArgs>
-class FactoryLibrary
+class BuilderLibrary
 {
  public:
-  using BaseFactory = Factory<Base,CtorArgs...>;
+  using BaseBuilder = Builder<Base,CtorArgs...>;
 
-  BaseFactory* getFactory(const std::string &name) {
+  BaseBuilder* getBuilder(const std::string &name) {
     auto iter = factories_.find(name);
     if (iter == factories_.end()){
       return nullptr;
@@ -31,23 +31,24 @@ class FactoryLibrary
     }
   }
 
-  const std::map<std::string, BaseFactory*>& getMap() const {
+  const std::map<std::string, BaseBuilder*>& getMap() const {
     return factories_;
   }
 
-  void addFactory(const std::string& name, BaseFactory* fact){
+  bool addBuilder(const std::string& name, BaseBuilder* fact){
     factories_[name] = fact;
+    return true;
   }
 
  private:
-  std::map<std::string, BaseFactory*> factories_;
+  std::map<std::string, BaseBuilder*> factories_;
 };
 
 template <class Base, class... CtorArgs>
-class FactoryLibraryDatabase {
+class BuilderLibraryDatabase {
  public:
-  using Library=FactoryLibrary<Base,CtorArgs...>;
-  using BaseFactory=typename Library::BaseFactory;
+  using Library=BuilderLibrary<Base,CtorArgs...>;
+  using BaseFactory=typename Library::BaseBuilder;
 
   static Library* getLibrary(const std::string& name){
     if (!libraries){
@@ -69,12 +70,12 @@ class FactoryLibraryDatabase {
 };
 
 template <class Base, class... CtorArgs>
- std::unique_ptr<std::map<std::string,FactoryLibrary<Base,CtorArgs...>*>>
-  FactoryLibraryDatabase<Base,CtorArgs...>::libraries;
+ std::unique_ptr<std::map<std::string,BuilderLibrary<Base,CtorArgs...>*>>
+  BuilderLibraryDatabase<Base,CtorArgs...>::libraries;
 
 
 template <class Base, class T>
-struct InstantiateFactory {
+struct InstantiateBuilder {
   static bool isLoaded() {
     return loaded;
   }
@@ -83,7 +84,7 @@ struct InstantiateFactory {
 };
 
 template <class Base, class T>
- const bool InstantiateFactory<Base,T>::loaded = Base::Ctor::template add<0,T>();
+ const bool InstantiateBuilder<Base,T>::loaded = Base::Ctor::template add<0,T>();
 
 template <class Base, class T, class Enable=void>
 struct Allocator
@@ -111,7 +112,7 @@ template <class Base, class T>
   Base* CachedAllocator<Base,T>::cached_ = nullptr;
 
 template <class Base, class T, class... Args>
-struct DerivedFactory : public Factory<Base,Args...>
+struct DerivedBuilder : public Builder<Base,Args...>
 {
   Base* create(Args... ctorArgs) override {
     return Allocator<Base,T>()(std::forward<Args>(ctorArgs)...);
@@ -119,12 +120,12 @@ struct DerivedFactory : public Factory<Base,Args...>
 };
 
 template <class Base, class... Args>
-struct DerivedFactory<Base,OldELITag,Args...> :
-  public Factory<Base,Args...>
+struct DerivedBuilder<Base,OldELITag,Args...> :
+  public Builder<Base,Args...>
 {
-  using typename Factory<Base,Args...>::createFxn;
+  using typename Builder<Base,Args...>::createFxn;
 
-  DerivedFactory(createFxn fxn) :
+  DerivedBuilder(createFxn fxn) :
     create_(fxn)
   {
   }
@@ -147,63 +148,64 @@ struct is_tuple_constructible<T, std::tuple<Args...>> :
 {
 };
 
-struct FactoryDatabase {
+struct BuilderDatabase {
   template <class T, class... Args>
-  static FactoryLibrary<T,Args...>* getLibrary(const std::string& name){
-    return FactoryLibraryDatabase<T,Args...>::getLibrary(name);
+  static BuilderLibrary<T,Args...>* getLibrary(const std::string& name){
+    return BuilderLibraryDatabase<T,Args...>::getLibrary(name);
   }
 };
 
 template <class Base, class CtorTuple>
-struct ElementsFactory {};
+struct ElementsBuilder {};
 
 template <class Base, class... Args>
-struct ElementsFactory<Base, std::tuple<Args...>>
+struct ElementsBuilder<Base, std::tuple<Args...>>
 {
-  static FactoryLibrary<Base,Args...>* getLibrary(const std::string& name){
-    return FactoryLibraryDatabase<Base,Args...>::getLibrary(name);
+  static BuilderLibrary<Base,Args...>* getLibrary(const std::string& name){
+    return BuilderLibraryDatabase<Base,Args...>::getLibrary(name);
   }
 
-  template <class T> static Factory<Base,Args...>* makeFactory(){
-    return new DerivedFactory<Base,T,Args...>();
+  template <class T> static Builder<Base,Args...>* makeBuilder(){
+    return new DerivedBuilder<Base,T,Args...>();
   }
 
 };
+
 
 template <class Base, class Ctor, class... Ctors>
 struct CtorList : public CtorList<Base,Ctors...>
 {
   template <int NumValid, class T, class U=T>
   static typename std::enable_if<std::is_abstract<U>::value || is_tuple_constructible<U,Ctor>::value, bool>::type
-  add(){
+  add(const std::string& elemlib, const std::string& elem){
     //if abstract, force an allocation to generate meaningful errors
-    auto* fact = ElementsFactory<Base,Ctor>::template makeFactory<U>();
-    ElementsFactory<Base,Ctor>::getLibrary(T::ELI_getLibrary())->addFactory(T::ELI_getName(), fact);
-    return CtorList<Base,Ctors...>::template add<NumValid+1,T>();
+    auto* fact = ElementsBuilder<Base,Ctor>::template makeBuilder<U>();
+    Base::addBuilder(elemlib,elem,fact);
+    return CtorList<Base,Ctors...>::template add<NumValid+1,T>(elemlib,elem);
   }
 
   template <int NumValid, class T, class U=T>
   static typename std::enable_if<!std::is_abstract<U>::value && !is_tuple_constructible<U,Ctor>::value, bool>::type
-  add(){
-    return CtorList<Base,Ctors...>::template add<NumValid,T>();
+  add(const std::string& elemlib, const std::string& elem){
+    return CtorList<Base,Ctors...>::template add<NumValid,T>(elemlib,elem);
   }
 
   //Ctor is a tuple
   template <class... InArgs>
   typename std::enable_if<std::is_convertible<std::tuple<InArgs&&...>, Ctor>::value, Base*>::type
   operator()(const std::string& elemlib, const std::string& name, InArgs&&... args){
-    auto* lib = ElementsFactory<Base,Ctor>::getLibrary(elemlib);
+    auto* lib = ElementsBuilder<Base,Ctor>::getLibrary(elemlib);
     if (lib){
-      auto* fact = lib->getFactory(name);
+      auto* fact = lib->getBuilder(name);
       if (fact){
         return fact->create(std::forward<InArgs>(args)...);
       }
-      std::cerr << "For library " << elemlib << ", " << Base::ELI_baseName()
-               << " " << name << " does not provide matching constructor"
+      std::cerr << "For library '" << elemlib << "', " << Base::ELI_baseName()
+               << " '" << name << "' is not registered with matching constructor"
                << std::endl;
     }
-    std::cerr << "No matching constructors found in library " << elemlib
-              << " for base " << Base::ELI_baseName() << std::endl;
+    std::cerr << "Nothing registerd in library '" << elemlib
+              << "' for base " << Base::ELI_baseName() << std::endl;
     abort();
   }
 
@@ -227,7 +229,7 @@ template <> class NoValidConstructorsForDerivedType<0> {};
 template <class Base> struct CtorList<Base,void>
 {
   template <int numValidCtors, class T>
-  static bool add(){
+  static bool add(const std::string& UNUSED(lib), const std::string& UNUSED(elem)){
     return NoValidConstructorsForDerivedType<numValidCtors>::atLeastOneValidCtor;
   }
 };
@@ -238,39 +240,71 @@ template <class Base> struct CtorList<Base,void>
 #define ELI_CTOR(...) std::tuple<__VA_ARGS__>
 #define ELI_DEFAULT_CTOR() std::tuple<>
 
-
-#define SST_ELI_REGISTER_CTORS_COMMON(...) \
-  using Ctor = ::SST::ELI::CtorList<__LocalEliName,__VA_ARGS__,void>; \
-  template <class... InArgs> static __LocalEliName* create( \
-    const std::string& elemlib, const std::string& elem, InArgs&&... args){ \
-    return Ctor()(elemlib, elem, std::forward<InArgs>(args)...); \
-  }
-
-#define SST_ELI_REGISTER_CTORS(...) \
-  SST_ELI_REGISTER_CTORS_COMMON(__VA_ARGS__) \
+#define SST_ELI_CTORS_COMMON(...) \
+  using Ctor = ::SST::ELI::CtorList<__LocalEliBase,__VA_ARGS__,void>; \
   template <class __TT, class... __CtorArgs> \
-  using DerivedFactory = ::SST::ELI::DerivedFactory<__LocalEliName,__TT,__CtorArgs...>; \
-  template <class... __InArgs> static FactoryLibrary<__InArgs...>* getFactoryLibrary(const std::string& name){ \
-    return ::SST::ELI::FactoryDatabase::getLibrary<__LocalEliName,__InArgs...>(name); \
+  using DerivedBuilder = ::SST::ELI::DerivedBuilder<__LocalEliBase,__TT,__CtorArgs...>; \
+  template <class... __InArgs> static SST::ELI::BuilderLibrary<__LocalEliBase,__InArgs...>* \
+  getBuilderLibraryTemplate(const std::string& name){ \
+    return ::SST::ELI::BuilderDatabase::getLibrary<__LocalEliBase,__InArgs...>(name); \
+  } \
+  template <class __TT> static bool addDerivedBuilder(const std::string& lib, const std::string& elem){ \
+    return Ctor::template add<0,__TT>(lib,elem); \
+  } \
+
+#define SST_ELI_DECLARE_CTORS(...) \
+  SST_ELI_CTORS_COMMON(ELI_FORWARD_AS_ONE(__VA_ARGS__)) \
+  template <class... Args> static bool addBuilder(const std::string& elemlib, const std::string& elem, \
+                                           SST::ELI::Builder<__LocalEliBase,Args...>* builder){ \
+    return getBuilderLibraryTemplate<Args...>(elemlib)->addBuilder(elem, builder); \
+  }
+
+#define SST_ELI_DECLARE_CTORS_EXTERN(...) \
+  SST_ELI_CTORS_COMMON(ELI_FORWARD_AS_ONE(__VA_ARGS__))
+
+#define SST_ELI_CTOR_COMMON(...) \
+  using BaseBuilder = ::SST::ELI::Builder<__LocalEliBase,__VA_ARGS__>; \
+  using BuilderLibrary = ::SST::ELI::BuilderLibrary<__LocalEliBase,__VA_ARGS__>; \
+  template <class __TT> using DerivedBuilder = ::SST::ELI::DerivedBuilder<__LocalEliBase,__TT,__VA_ARGS__>; \
+  template <class __TT> static bool addDerivedBuilder(const std::string& lib, const std::string& elem){ \
+    return addBuilder(lib,elem,new DerivedBuilder<__TT>); \
   }
 
 //I can make some extra using typedefs because I have only a single ctor
-#define SST_ELI_REGISTER_CTOR(...) \
-  SST_ELI_REGISTER_CTORS_COMMON(ELI_CTOR(__VA_ARGS__)) \
-  template <class __TT> \
-  using DerivedFactory = ::SST::ELI::DerivedFactory<__LocalEliName,__TT,__VA_ARGS__>; \
-  static FactoryLibrary<__VA_ARGS__>* getFactoryLibrary(const std::string& name){ \
-    return SST::ELI::FactoryDatabase::getLibrary<__LocalEliName,__VA_ARGS__>(name); \
+#define SST_ELI_DECLARE_CTOR(...) \
+  SST_ELI_CTOR_COMMON(__VA_ARGS__) \
+  static BuilderLibrary* getBuilderLibrary(const std::string& name){ \
+    return SST::ELI::BuilderDatabase::getLibrary<__LocalEliBase,__VA_ARGS__>(name); \
+  } \
+  static bool addBuilder(const std::string& elemlib, const std::string& elem, BaseBuilder* builder){ \
+    return getBuilderLibrary(elemlib)->addBuilder(elem,builder); \
   }
 
+#define SST_ELI_DECLARE_CTOR_EXTERN(...) \
+  SST_ELI_CTOR_COMMON(__VA_ARGS__) \
+  static BuilderLibrary* getBuilderLibrary(const std::string& name); \
+  static bool addBuilder(const std::string& elemlib, const std::string& elem, BaseBuilder* builder);
+
+#define SST_ELI_DEFAULT_CTOR_COMMON() \
+  using BaseBuilder = ::SST::ELI::Builder<__LocalEliBase>; \
+  using BuilderLibrary = ::SST::ELI::BuilderLibrary<__LocalEliBase>; \
+  template <class __TT> using DerivedBuilder = ::SST::ELI::DerivedBuilder<__LocalEliBase,__TT>;
+
 //I can make some extra using typedefs because I have only a single ctor
-#define SST_ELI_REGISTER_DEFAULT_CTOR() \
-  SST_ELI_REGISTER_CTORS_COMMON(ELI_DEFAULT_CTOR()) \
-  template <class __TT> \
-  using DerivedFactory = ::SST::ELI::DerivedFactory<__LocalEliName,__TT>; \
-  static FactoryLibrary<>* getFactoryLibrary(const std::string& name){ \
-    return SST::ELI::FactoryDatabase::getLibrary<__LocalEliName>(name); \
+#define SST_ELI_DECLARE_DEFAULT_CTOR() \
+  SST_ELI_DEFAULT_CTOR_COMMON() \
+  static BuilderLibrary<>* getBuilderLibrary(const std::string& name){ \
+    return SST::ELI::BuilderDatabase::getLibrary<__LocalEliBase>(name); \
+  } \
+  static bool addBuilder(const std::string& elemlib, const std::string& elem, BaseBuilder* builder){ \
+    return getBuilderLibrary(elemlib)->addBuilder(elem,builder); \
   }
+
+#define SST_ELI_DECLARE_DEFAULT_CTOR_EXTERN() \
+  SST_ELI_DEFAULT_CTOR_COMMON() \
+  static BuilderLibrary<>* getBuilderLibrary(const std::string& name); \
+  static bool addBuilder(const std::string& elemlib, const std::string& elem, BaseBuilder* builder);
+
 
 #endif
 

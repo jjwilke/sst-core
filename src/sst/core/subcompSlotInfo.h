@@ -26,7 +26,7 @@ struct InfoSubs<T,
   }
 };
 
-class ImplementsSubComponentInfo {
+class ProvidesSubComponentSlots {
  public:
   const std::vector<ElementInfoSubComponentSlot>& getSubComponentSlots() const {
     return slots_;
@@ -52,12 +52,12 @@ class ImplementsSubComponentInfo {
   }
 
  protected:
-  template <class T> ImplementsSubComponentInfo(T* UNUSED(t)) :
+  template <class T> ProvidesSubComponentSlots(T* UNUSED(t)) :
     slots_(InfoSubs<T>::get())
   {
   }
 
-  template <class U> ImplementsSubComponentInfo(OldELITag& UNUSED(tag), U* u)
+  template <class U> ProvidesSubComponentSlots(OldELITag& UNUSED(tag), U* u)
   {
     auto *s = u->subComponents;
     while ( NULL != s && NULL != s->name ) {

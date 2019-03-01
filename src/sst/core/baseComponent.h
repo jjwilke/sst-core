@@ -107,6 +107,53 @@ class BaseComponent {
 
 public:
 
+    struct BuilderInfo :
+      public ELI::ProvidesParams,
+      public ELI::ProvidesPorts,
+      public ELI::ProvidesStats,
+      public ELI::ProvidesSubComponentSlots,
+      public ELI::ProvidesDefaultInfo
+    {
+      template <class... Args> BuilderInfo(const std::string& UNUSED(elemlib),
+                                           const std::string& UNUSED(name),
+                                           Args&&... args) :
+         ELI::ProvidesParams(args...),
+         ELI::ProvidesPorts(args...),
+         ELI::ProvidesStats(args...),
+         ELI::ProvidesSubComponentSlots(args...),
+         ELI::ProvidesDefaultInfo(args...)
+      {
+      }
+
+      template <class T> BuilderInfo(T* t) :
+         ELI::ProvidesParams(t),
+         ELI::ProvidesPorts(t),
+         ELI::ProvidesStats(t),
+         ELI::ProvidesSubComponentSlots(t),
+         ELI::ProvidesDefaultInfo(t)
+      {
+      }
+
+      void ctorCommon();
+
+      void toString(std::ostream &os) const;
+      template <class XML> void outputXML(XML* xml){
+        ELI::ProvidesParams::outputXML(xml);
+        ELI::ProvidesPorts::outputXML(xml);
+        ELI::ProvidesStats::outputXML(xml);
+        ELI::ProvidesSubComponentSlots::outputXML(xml);
+        ELI::ProvidesDefaultInfo::outputXML(xml);
+      }
+    };
+
+    SST_ELI_DECLARE_INFO_COMMON()
+
+    static bool addInfo(const std::string& elem, const std::string& lib, BuilderInfo* info);
+
+    static const std::vector<ElementInfoParam>& ELI_getParams();
+
+    static const std::vector<SST::ElementInfoPort2>& ELI_getPorts();
+
     BaseComponent();
     virtual ~BaseComponent();
 

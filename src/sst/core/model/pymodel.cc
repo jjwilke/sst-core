@@ -25,6 +25,8 @@ REENABLE_WARNING
 #include <string.h>
 #include <sstream>
 
+#include <sst/core/model/element_python.h>
+
 #include <sst/core/sst_types.h>
 #include <sst/core/model/pymodel.h>
 #include <sst/core/model/pymodel_comp.h>

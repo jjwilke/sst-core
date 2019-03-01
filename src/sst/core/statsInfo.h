@@ -25,7 +25,7 @@ struct InfoStats<T,
   }
 };
 
-class ImplementsStatsInfo {
+class ProvidesStats {
  private:
   std::vector<std::string> statnames;
   std::vector<ElementInfoStatistic> stats_;
@@ -37,13 +37,13 @@ class ImplementsStatsInfo {
   }
 
  protected:
-  template <class T> ImplementsStatsInfo(T* UNUSED(t)) :
+  template <class T> ProvidesStats(T* UNUSED(t)) :
     stats_(InfoStats<T>::get())
   {
     init();
   }
 
-  template <class U> ImplementsStatsInfo(OldELITag& UNUSED(tag), U* u)
+  template <class U> ProvidesStats(OldELITag& UNUSED(tag), U* u)
   {
     auto *s = u->stats;
     while ( NULL != s && NULL != s->name ) {

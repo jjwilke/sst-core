@@ -24,9 +24,9 @@ class Output;
  */
 class TimeVortex : public ActivityQueue, public Module {
 public:
-  SST_ELI_REGISTER_BASE(TimeVortex,
-    ELI::ImplementsParamInfo)
-  SST_ELI_REGISTER_CTOR(SST::Params&)
+  SST_ELI_DECLARE_BASE(TimeVortex)
+  SST_ELI_DECLARE_INFO(ELI::ProvidesParams)
+  SST_ELI_DECLARE_CTOR(SST::Params&)
 
 	TimeVortex() {
         max_depth = MAX_SIMTIME_T;
@@ -45,6 +45,10 @@ public:
     virtual uint64_t getMaxDepth() const { return max_depth; }
     virtual uint64_t getCurrentDepth() const = 0;
 
+    static const std::vector<SST::ElementInfoParam>& ELI_getParams() {
+        static std::vector<SST::ElementInfoParam> var{};
+        return var;
+    }
     
 protected:
     uint64_t max_depth;

@@ -32,8 +32,9 @@ class SSTPartitioner
 {
 
 public:
-  SST_ELI_REGISTER_BASE_DEFAULT(SSTPartitioner)
-  SST_ELI_REGISTER_CTOR(RankInfo,RankInfo,int)
+  SST_ELI_DECLARE_BASE(SSTPartitioner)
+  SST_ELI_DECLARE_DEFAULT_INFO()
+  SST_ELI_DECLARE_CTOR(RankInfo,RankInfo,int)
 
     SSTPartitioner() {}
     virtual ~SSTPartitioner() {}

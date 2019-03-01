@@ -9,12 +9,14 @@
 // information, see the LICENSE file in the top level directory of the
 // distribution.
 
+
 #ifndef SST_CORE_CORE_THREADSAFE_H
 #define SST_CORE_CORE_THREADSAFE_H
 
+
 #if ( defined( __amd64 ) || defined( __amd64__ ) || \
         defined( __x86_64 ) || defined( __x86_64__ ) )
-#include <x86intrin.h>
+//#include <x86intrin.h>
 #endif
 
 #include <thread>

@@ -86,7 +86,7 @@ struct NullStatisticBase<T,false> : public Statistic<T> {
 template <class T>
 struct NullStatistic : public NullStatisticBase<T> {
 
-  SST_ELI_REGISTER_STATISTIC_TEMPLATE(
+  SST_ELI_DECLARE_STATISTIC_TEMPLATE(
       NullStatistic,
       "sst",
       "NullStatistic",

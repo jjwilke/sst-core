@@ -163,25 +163,18 @@ public:
      */
     template <class T>
     T find(const std::string &k, T default_value, bool &found) const {
-        verifyParam(k);
-        const_iterator i = data.find(getKey(k));
-        if (i == data.end()) {
-            found = false;
-            return default_value;
-        } else {
-            found = true;
-            try {
-                return SST::Core::from_string<T>(i->second);
-            }
-            catch ( const std::invalid_argument& e ) {
-                std::string msg = "Params::find(): No conversion for value: key = " + k + ", value =  " + i->second +
-                    ".  Original error: " + e.what();
-                std::invalid_argument t(msg);
-                throw t;
-            }
-        }        
+      std::string val;
+      found = getString(k,val);
+      if (found){
+        return SST::Core::from_string<T>(val);
+      } else {
+        return default_value;
+      }
     }
-    
+
+    void error(const std::string& k, const std::string& val,
+               const std::invalid_argument& e) const;
+
     /** Find a Parameter value in the set, and return its value as a type T.
      * Type T must be either a basic numeric type (including bool) ,
      * a std::string, or a class that has a constructor with a std::string
@@ -194,31 +187,15 @@ public:
      */
     template <class T>
     T find(const std::string &k, std::string default_value, bool &found) const {
-        verifyParam(k);
-        const_iterator i = data.find(getKey(k));
-        if (i == data.end()) {
-            found = false;
-            try {
-                return SST::Core::from_string<T>(default_value);
-            }
-            catch ( const std::invalid_argument& e ) {
-                std::string msg = "Params::find(): Invalid default value specified: key = " + k + ", value =  " + i->second +
-                    ".  Original error: " + e.what();
-                std::invalid_argument t(msg);
-                throw t;
-            }
-        } else {
-            found = true;
-            try {
-                return SST::Core::from_string<T>(i->second);
-            }
-            catch ( const std::invalid_argument& e ) {
-                std::string msg = "Params::find(): No conversion for value: key = " + k + ", value =  " + i->second +
-                    ".  Original error: " + e.what();
-                std::invalid_argument t(msg);
-                throw t;
-            }
-        }        
+        found = getString(k, default_value);
+        try {
+          return SST::Core::from_string<T>(default_value);
+        }
+        catch ( const std::invalid_argument& e ) {
+          error(k, default_value, e);
+        }
+        //to get rid of compile-error
+        return T{};
     }
     
     /** Find a Parameter value in the set, and return its value as a type T.
@@ -277,171 +254,55 @@ public:
         return find<T>(k, T{}, found);
     }
 
-    UnitAlgebra findUnits(const std::string& k) const {
-      bool found;
-      std::string val = find<std::string>(k, found);
-      if (!found){
-        std::string msg = "no unit algebra parameter found on key " + k;
-        throw std::invalid_argument(msg);
-      }
-      return UnitAlgebra(val);
+    template <class T> void find_array(const key_type &k, std::vector<T>& vec) const {
+      template_find_array(k,vec);
     }
 
-    UnitAlgebra findUnits(const std::string& k, const std::string& def) const {
-      std::string val = find<std::string>(k, def);
-      return UnitAlgebra(val);
-    }
-
-    /** Find a Parameter value in the set, and return its value as a
-     * vector of T's.  The array will be appended to
-     * the end of the vector.
-     * Type T must be either a basic numeric type (including bool) ,
-     * a std::string, or a class that has a constructor with a std::string
-     * as its only parameter.  This class uses SST::Core::from_string to
-     * do the conversion.
-     *
-     * @param k - Parameter name
-     * @param vec - vector to append array items to
-     */
-    template <class T>
-    void find_array(const key_type &k, std::vector<T>& vec) const {
-        verifyParam(k);
-        const_iterator i = data.find(getKey(k));
-        if ( i == data.end()) {
-            return;
-        }
-        std::string value = i->second;
-        // String should start with [ and end with ], we need to cut
-        // these out
-        // Test the value for correct [...] formatting
-        if( (value.find("[") == std::string::npos) ||
-            (value.find("]") == std::string::npos) ){
-          std::string msg =
-            "Params::find_array(): Invalid formatting: String must be enclosed by brackets [str]";
-          std::invalid_argument t(msg);
-          throw t;
-        }
-        value = value.substr(0,value.size()-1);
-        value = value.substr(1);
-
-        std::stringstream ss(value);
-
-        while( ss.good() ) {
-            std::string substr;
-            getline( ss, substr, ',' );
-            // vec.push_back(strtol(substr.c_str(), NULL, 0));
-            try {
-                vec.push_back(SST::Core::from_string<T>(substr));
-            }
-            catch ( const std::invalid_argument& e ) {
-                std::string msg = "Params::find(): No conversion for value: key = " + k + ", value =  " + substr +
-                    ".  Original error: " + e.what();
-                std::invalid_argument t(msg);
-                throw t;
-            }
-        }
-    }
+    void find_array(const key_type &k, std::vector<std::string> &vec) const;
+    void find_array(const key_type &k, std::vector<int> &vec) const;
+    void find_array(const key_type &k, std::vector<uint64_t> &vec) const;
+    void find_array(const key_type &k, std::vector<double> &vec) const;
 
     /** Print all key/value parameter pairs to specified ostream */
-    void print_all_params(std::ostream &os, std::string prefix = "") const {
-        for (const_iterator i = data.begin() ; i != data.end() ; ++i) {
-            os << prefix << "key=" << keyMapReverse[i->first] << ", value=" << i->second << std::endl;
-        }
-    }
+    void print_all_params(std::ostream &os, std::string prefix = "") const;
 
-    void print_all_params(Output &out, std::string prefix = "") const {
-        for (const_iterator i = data.begin() ; i != data.end() ; ++i) {
-            out.output("%s%s = %s\n", prefix.c_str(), keyMapReverse[i->first].c_str(), i->second.c_str());
-        }
-    }
+    void print_all_params(Output &out, std::string prefix = "") const;
 
     /** Add a key value pair into the param object.
      */
-    void insert(const std::string& key, const std::string& value, bool overwrite = true) {
-        if ( overwrite ) {
-            data[getKey(key)] = value;
-        }
-        else {
-            uint32_t id = getKey(key);
-            data.insert(std::make_pair(id, value));
-        }
-    }
+    void insert(const std::string& key, const std::string& value, bool overwrite = true);
 
-    void insert(const Params& params) {
-        data.insert(params.data.begin(), params.data.end());
-    }
+    void insert(const Params& params);
 
-    std::set<std::string> getKeys() const {
-        std::set<std::string> ret;
-        for (const_iterator i = data.begin() ; i != data.end() ; ++i) {
-            ret.insert(keyMapReverse[i->first]);
-        }
-        return ret;
-    }
+    std::set<std::string> getKeys() const;
     
      /** Returns a new parameter object with parameters that match
      * the specified prefix.
      */
-    Params find_prefix_params(std::string prefix) const {
-        Params ret;
-        ret.enableVerify(false);
-        for (const_iterator i = data.begin() ; i != data.end() ; ++i) {
-            auto const& paramName = keyMapReverse[i->first];
-            std::string key = paramName.substr(0, prefix.length());
-            if (key == prefix) {
-              auto start = prefix.length();
-              if (paramName.at(start) == '.'){
-                start = start + 1; //implicitly skip periods
-              }
-              ret.insert(paramName.substr(start), i->second);
-            }
-        }
-        ret.allowedKeys = allowedKeys;
-        ret.enableVerify(verify_enabled);
-
-        return ret;
-    }
-
+    Params find_prefix_params(std::string prefix) const;
 
     /**
      * @param k   Key to search for
      * @return    True if the params contains the key, false otherwise
      */
-    bool contains(const key_type &k) {
-        return data.find(getKey(k)) != data.end();
-    }
+    bool contains(const key_type &k);
 
     /**
      * @param keys   Set of keys to consider valid to add to the stack
      *               of legal keys
      */
-    void pushAllowedKeys(const KeySet_t &keys) {
-        allowedKeys.push_back(keys);
-    }
+    void pushAllowedKeys(const KeySet_t &keys);
 
     /**
      * Removes the most recent set of keys considered allowed
      */
-    void popAllowedKeys() {
-        allowedKeys.pop_back();
-    }
+    void popAllowedKeys();
 
     /**
      * @param k   Key to check for validity
      * @return    True if the key is considered allowed
      */
-    void verifyParam(const key_type &k) const {
-        if ( !g_verify_enabled || !verify_enabled ) return;
-
-        for ( std::vector<KeySet_t>::const_reverse_iterator ri = allowedKeys.rbegin() ; ri != allowedKeys.rend() ; ++ri ) {
-            if ( ri->find(k) != ri->end() ) return;
-        }
-
-#ifdef USE_PARAM_WARNINGS
-        SST::Output outXX("ParamWarning: ", 0, 0, Output::STDERR);
-        outXX.output(CALL_INFO, "Warning: Parameter \"%s\" is undocumented.\n", k.c_str());
-#endif
-    }
+    void verifyParam(const key_type &k) const;
 
 
     /**
@@ -449,47 +310,73 @@ public:
      * @param id  Key ID to look up
      * @return    String name of the parameter
      */
-    static const std::string& getParamName(uint32_t id)
-    {
-        return keyMapReverse[id];
-    }
+    static const std::string& getParamName(uint32_t id);
 
-
-    void serialize_order(SST::Core::Serialization::serializer &ser) override {
-        ser & data;
-    }    
+    void serialize_order(SST::Core::Serialization::serializer &ser) override;
     
     ImplementSerializable(SST::Params)
 
 private:
+      /** Find a Parameter value in the set, and return its value as a
+       * vector of T's.  The array will be appended to
+       * the end of the vector.
+       * Type T must be either a basic numeric type (including bool) ,
+       * a std::string, or a class that has a constructor with a std::string
+       * as its only parameter.  This class uses SST::Core::from_string to
+       * do the conversion.
+       *
+       * @param k - Parameter name
+       * @param vec - vector to append array items to
+       */
+      template <class T>
+      void template_find_array(const key_type &k, std::vector<T>& vec) const {
+          verifyParam(k);
+          const_iterator i = data.find(getKey(k));
+          if ( i == data.end()) {
+              return;
+          }
+          std::string value = i->second;
+          // String should start with [ and end with ], we need to cut
+          // these out
+          // Test the value for correct [...] formatting
+          if( (value.find("[") == std::string::npos) ||
+              (value.find("]") == std::string::npos) ){
+            std::string msg =
+              "Params::find_array(): Invalid formatting: String must be enclosed by brackets [str]";
+            std::invalid_argument t(msg);
+            throw t;
+          }
+          value = value.substr(0,value.size()-1);
+          value = value.substr(1);
+
+          std::stringstream ss(value);
+
+          while( ss.good() ) {
+              std::string substr;
+              getline( ss, substr, ',' );
+              // vec.push_back(strtol(substr.c_str(), NULL, 0));
+              try {
+                  vec.push_back(SST::Core::from_string<T>(substr));
+              }
+              catch ( const std::invalid_argument& e ) {
+                  std::string msg = "Params::find(): No conversion for value: key = " + k + ", value =  " + substr +
+                      ".  Original error: " + e.what();
+                  std::invalid_argument t(msg);
+                  throw t;
+              }
+          }
+      }
+
+    bool getString(const std::string& k, std::string& in) const;
+
     std::map<uint32_t, std::string> data;
     std::vector<KeySet_t> allowedKeys;
     bool verify_enabled;
     static bool g_verify_enabled;
 
-    uint32_t getKey(const std::string &str) const
-    {
-        std::lock_guard<SST::Core::ThreadSafe::Spinlock> lock(keyLock);
-        std::map<std::string, uint32_t>::iterator i = keyMap.find(str);
-        if ( i == keyMap.end() ) {
-            return (uint32_t)-1;
-        }
-        return i->second;
-    }
+    uint32_t getKey(const std::string &str) const;
 
-    uint32_t getKey(const std::string &str)
-    {
-        std::lock_guard<SST::Core::ThreadSafe::Spinlock> lock(keyLock);
-        std::map<std::string, uint32_t>::iterator i = keyMap.find(str);
-        if ( i == keyMap.end() ) {
-            uint32_t id = nextKeyID++;
-            keyMap.insert(std::make_pair(str, id));
-            keyMapReverse.push_back(str);
-            assert(keyMapReverse.size() == nextKeyID);
-            return id;
-        }
-        return i->second;
-    }
+    uint32_t getKey(const std::string &str);
 
     /* Friend main() because it broadcasts the maps */
     friend int ::main(int argc, char *argv[]);

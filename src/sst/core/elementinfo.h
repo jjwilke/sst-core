@@ -55,14 +55,49 @@ const std::vector<int> SST_ELI_VERSION = {0, 9, 0};
 
 namespace ELI {
 
-template <class Policy, class... Policies>
-class FactoryInfoImpl : public Policy, public FactoryInfoImpl<Policies...>
-{
-  using Parent=FactoryInfoImpl<Policies...>;
+template <class T>
+class DataBase {
  public:
-  template <class... Args> FactoryInfoImpl(Args&&... args)
-    : Policy(args...), Parent(args...) //forward as l-values
+  static T* get(const std::string& elemlib, const std::string& elem){
+    if (!infos_) return nullptr;
+
+    auto libiter = infos_->find(elemlib);
+    if (libiter != infos_->end()){
+      auto& submap = libiter->second;
+      auto elemiter = submap.find(elem);
+      if (elemiter != submap.end()){
+        return elemiter->second;
+      }
+    }
+    return nullptr;
+  }
+
+  static void add(const std::string& elemlib, const std::string& elem, T* info){
+    if (!infos_){
+      infos_ = std::unique_ptr<std::map<std::string, std::map<std::string, T*>>>(
+                  new std::map<std::string, std::map<std::string, T*>>);
+    }
+
+    (*infos_)[elemlib][elem] = info;
+  }
+
+ private:
+  static std::unique_ptr<std::map<std::string, std::map<std::string, T*>>> infos_;
+};
+template <class T> std::unique_ptr<std::map<std::string,std::map<std::string,T*>>> DataBase<T>::infos_;
+
+
+template <class Policy, class... Policies>
+class BuilderInfoImpl : public Policy, public BuilderInfoImpl<Policies...>
+{
+  using Parent=BuilderInfoImpl<Policies...>;
+ public:
+  template <class... Args> BuilderInfoImpl(const std::string& elemlib,
+                                           const std::string& elem,
+                                           Args&&... args)
+    : Policy(args...), Parent(elemlib, elem, args...) //forward as l-values
   {
+    DataBase<Policy>::add(elemlib,elem,this);
   }
 
   template <class XMLNode> void outputXML(XMLNode* node){
@@ -76,9 +111,9 @@ class FactoryInfoImpl : public Policy, public FactoryInfoImpl<Policies...>
   }
 };
 
-template <> class FactoryInfoImpl<void> {
+template <> class BuilderInfoImpl<void> {
  protected:
-  template <class... Args> FactoryInfoImpl(Args&&... UNUSED(args))
+  template <class... Args> BuilderInfoImpl(Args&&... UNUSED(args))
   {
   }
 
@@ -88,45 +123,8 @@ template <> class FactoryInfoImpl<void> {
 
 };
 
-template <class Base>
-struct FactoryInfo : public Base::Info
-{
-  template <class T> FactoryInfo(T* t) :
-    Base::Info(t)
-  {
-  }
-
-  template <class Info> FactoryInfo(OldELITag& tag, Info* info) :
-    Base::Info(tag,info)
-  {
-  }
-
-};
-
-
 template <class Base, class T>
-struct DerivedFactoryInfo : public FactoryInfo<Base>
-{
-  DerivedFactoryInfo() : FactoryInfo<Base>((T*)nullptr)
-  {
-  }
-
-};
-
-template <class Base>
-struct DerivedFactoryInfo<Base,OldELITag> :
-  public Base::Info
-{
-  template <class Info>
-  DerivedFactoryInfo(const std::string& library, Info* info) :
-    Base::Info(OldELITag{library}, info)
-  {
-  }
-
-};
-
-template <class Base, class T>
-struct InstantiateInfo {
+struct InstantiateBuilderInfo {
   static bool isLoaded() {
     return loaded;
   }
@@ -134,7 +132,7 @@ struct InstantiateInfo {
   static const bool loaded;
 };
 
-class DataBase {
+class LoadedLibraries {
  public:
   static void addLoaded(const std::string& name){
     if (!loaded_){
@@ -158,7 +156,7 @@ class DataBase {
 template <class Base> class InfoLibrary
 {
  public:
-  using BaseInfo = typename Base::Info;
+  using BaseInfo = typename Base::BuilderInfo;
 
   BaseInfo* getInfo(const std::string& name) {
     auto iter = infos_.find(name);
@@ -177,8 +175,9 @@ template <class Base> class InfoLibrary
     return infos_;
   }
 
-  void addInfo(BaseInfo* info){
-    infos_[info->getName()] = info;
+  bool addInfo(const std::string& name, BaseInfo* info){
+    infos_[name] = info;
+    return true;
   }
 
  private:
@@ -198,7 +197,7 @@ class InfoLibraryDatabase {
     }
     auto iter = libraries->find(name);
     if (iter == libraries->end()){
-      DataBase::addLoaded(name);
+      LoadedLibraries::addLoaded(name);
       auto* info = new Library;
       (*libraries)[name] = info;
       return info;
@@ -224,15 +223,13 @@ struct ElementsInfo
   }
 
   template <class T> static bool add(){
-    auto* info = new DerivedFactoryInfo<Base,T>();
-    ElementsInfo<Base>::getLibrary(T::ELI_getLibrary())->addInfo(info);
+    auto* info = new typename Base::BuilderInfo(T::ELI_getLibrary(), T::ELI_getName(), (T*)nullptr);
+    ElementsInfo<Base>::getLibrary(T::ELI_getLibrary())->addInfo(T::ELI_getName(), info);
     return true;
   }
-
 };
-
 template <class Base, class T>
- const bool InstantiateInfo<Base,T>::loaded = ElementsInfo<Base>::template add<T>();
+ const bool InstantiateBuilderInfo<Base,T>::loaded = ElementsInfo<Base>::template add<T>();
 
 
 struct InfoDatabase {
@@ -276,42 +273,55 @@ constexpr unsigned SST_ELI_getTertiaryNumberFromVersion(SST_ELI_element_version_
   Macros used by elements to add element documentation
 **************************************************************************/
 
-
-
-#define SST_ELI_REGISTER_COMMON(Base) \
-  using __LocalEliName = Base; \
-  template <class... __Args> \
-  using FactoryLibrary = ::SST::ELI::FactoryLibrary<Base,__Args...>; \
+#define SST_ELI_DECLARE_BASE(Base) \
+  using __LocalEliBase = Base; \
   using InfoLibrary = ::SST::ELI::InfoLibrary<Base>; \
-  template <class __TT> \
-  using DerivedInfo = ::SST::ELI::DerivedFactoryInfo<Base,__TT>; \
-  static InfoLibrary* getInfoLibrary(const std::string& name){ \
-    return SST::ELI::InfoDatabase::getLibrary<Base>(name); \
-  } \
-  static __LocalEliName::Info* getInfo(const std::string& elemlib, const std::string& name){ \
-    auto* lib = getInfoLibrary(elemlib); \
-    if (lib) return lib->getInfo(name); \
-    else return nullptr; \
-  } \
   static const char* ELI_baseName(){ return #Base; }
 
+#define SST_ELI_DECLARE_INFO_COMMON() \
+  template <class __TT> static bool addDerivedInfo(const std::string& lib, const std::string& elem){ \
+    return addInfo(lib,elem,new BuilderInfo(lib,elem,(__TT*)nullptr)); \
+  }
 
+#define SST_ELI_DECLARE_INFO(...) \
+  using BuilderInfo = ::SST::ELI::BuilderInfoImpl<__VA_ARGS__,SST::ELI::ProvidesDefaultInfo,void>; \
+  SST_ELI_DECLARE_INFO_COMMON() \
+  template <class... __Args> static bool addInfo(const std::string& elemlib, const std::string& elem, \
+                                   ::SST::ELI::BuilderInfoImpl<__Args...>* info){ \
+    return ::SST::ELI::InfoDatabase::getLibrary<__LocalEliBase>(elemlib)->addInfo(elem,info); \
+  }
 
-#define SST_ELI_REGISTER_BASE(Base,...) \
-  using Info = ::SST::ELI::FactoryInfoImpl<__VA_ARGS__,SST::ELI::DefaultFactoryInfo,void>; \
-  SST_ELI_REGISTER_COMMON(Base)
+#define SST_ELI_DECLARE_DEFAULT_INFO() \
+  using BuilderInfo = ::SST::ELI::BuilderInfoImpl<SST::ELI::ProvidesDefaultInfo,void>; \
+  SST_ELI_DECLARE_INFO_COMMON() \
+  template <class... __Args> static bool addInfo(const std::string& elemlib, const std::string& elem, \
+                                   ::SST::ELI::BuilderInfoImpl<__Args...>* info){ \
+    return ::SST::ELI::InfoDatabase::getLibrary<__LocalEliBase>(elemlib)->addInfo(elem,info); \
+  }
 
-#define SST_ELI_REGISTER_BASE_DEFAULT(Base) \
-  using Info = ::SST::ELI::FactoryInfoImpl<SST::ELI::DefaultFactoryInfo,void>; \
-  SST_ELI_REGISTER_COMMON(Base)
+#define SST_ELI_DECLARE_EXTERN_INFO() \
+  using BuilderInfo = ::SST::ELI::BuilderInfoImpl<__VA_ARGS__,SST::ELI::ProvidesDefaultInfo,void>; \
+  SST_ELI_DECLARE_INFO_COMMON()
+
+#define SST_ELI_DECLARE_INFO_EXTERN(...) \
+  using BuilderInfo = ::SST::ELI::BuilderInfoImpl<__VA_ARGS__,SST::ELI::ProvidesDefaultInfo,void>; \
+  SST_ELI_DECLARE_INFO_COMMON()
+
+#define SST_ELI_EXTERN_DERIVED(base,cls,lib,name,version,desc) \
+  static bool ELI_isLoaded(); \
+  SST_ELI_DEFAULT_INFO(lib,name,ELI_FORWARD_AS_ONE(version),desc)
 
 #define SST_ELI_REGISTER_DERIVED(base,cls,lib,name,version,desc) \
-  bool ELI_isLoaded() { \
-      return SST::ELI::InstantiateFactory<base,cls>::isLoaded() \
-        && SST::ELI::InstantiateInfo<base,cls>::isLoaded(); \
+  static bool ELI_isLoaded() { \
+    return base::addDerivedInfo<cls>(lib,name) && base::addDerivedBuilder<cls>(lib,name); \
   } \
   SST_ELI_DEFAULT_INFO(lib,name,ELI_FORWARD_AS_ONE(version),desc)
 
+#define SST_ELI_REGISTER_EXTERN(base,cls) \
+  bool cls::ELI_isLoaded(){ \
+    return SST::ELI::InstantiateBuilder<base,cls>::isLoaded() \
+      && SST::ELI::InstantiateBuilderInfo<base,cls>::isLoaded(); \
+  }
 
 } //namespace SST
 

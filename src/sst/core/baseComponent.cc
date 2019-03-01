@@ -86,6 +86,31 @@ public:
     }
 };
 
+
+const std::vector<ElementInfoParam>&
+BaseComponent::ELI_getParams()
+{
+  static std::vector<ElementInfoParam> empty;
+  return empty;
+}
+
+const std::vector<SST::ElementInfoPort2>&
+BaseComponent::ELI_getPorts()
+{
+  static std::vector<ElementInfoPort2> empty;
+  return empty;
+}
+
+void
+BaseComponent::BuilderInfo::toString(std::ostream &os) const
+{
+  ELI::ProvidesParams::toString(os);
+  ELI::ProvidesPorts::toString(os);
+  ELI::ProvidesStats::toString(os);
+  ELI::ProvidesSubComponentSlots::toString(os);
+  ELI::ProvidesDefaultInfo::toString(os);
+}
+
 BaseComponent::BaseComponent() :
     defaultTimeBase(NULL), my_info(NULL),
     sim(Simulation::getSimulation()),

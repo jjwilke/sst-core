@@ -21,4 +21,10 @@ SubComponent::doesComponentInfoStatisticExist(const std::string &statisticName) 
     return ::SST::Factory::getFactory()->DoesSubComponentInfoStatisticNameExist(my_info->getType(), statisticName);
 }
 
+SubComponent::BuilderLibrary*
+SubComponent::getBuilderLibrary(const std::string &name)
+{
+  return ELI::BuilderDatabase::getLibrary<SubComponent,Component*,Params&>(name);
+}
+
 } // namespace SST

@@ -11,7 +11,7 @@ namespace SST {
 namespace ELI {
 
 template <class T, class Enable=void>
-struct InfoParams {
+struct GetParams {
   static const std::vector<SST::ElementInfoParam>& get() {
     static std::vector<SST::ElementInfoParam> var = { };
     return var;
@@ -19,14 +19,14 @@ struct InfoParams {
 };
 
 template <class T>
-struct InfoParams<T,
+struct GetParams<T,
       typename MethodDetect<decltype(T::ELI_getParams())>::type> {
   static const std::vector<SST::ElementInfoParam>& get() {
     return T::ELI_getParams();
   }
 };
 
-class ImplementsParamInfo {
+class ProvidesParams {
  public:
    const std::vector<ElementInfoParam>& getValidParams() const {
      return params_;
@@ -58,12 +58,13 @@ class ImplementsParamInfo {
    }
 
  protected:
-  template <class T> ImplementsParamInfo(T* UNUSED(t)) :
-   params_(InfoParams<T>::get()){
+  template <class T> ProvidesParams(T* UNUSED(t)) :
+   params_(GetParams<T>::get())
+  {
    init();
   }
 
-  template <class U> ImplementsParamInfo(OldELITag& UNUSED(tag), U* u)
+  template <class U> ProvidesParams(OldELITag& UNUSED(tag), U* u)
   {
      auto *p = u->params;
      while (NULL != p && NULL != p->name) {
@@ -74,11 +75,7 @@ class ImplementsParamInfo {
   }
 
  private:
-  void init(){
-    for (auto& item : params_){
-      allowedKeys.insert(item.name);
-    }
-  }
+  void init();
 
   Params::KeySet_t allowedKeys;
   std::vector<ElementInfoParam> params_;

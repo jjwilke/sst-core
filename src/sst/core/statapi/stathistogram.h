@@ -43,7 +43,7 @@ template<class BinDataType>
 class HistogramStatistic : public Statistic<BinDataType> 
 {
  public:
-  SST_ELI_REGISTER_STATISTIC_TEMPLATE(
+  SST_ELI_DECLARE_STATISTIC_TEMPLATE(
       HistogramStatistic,
       "sst",
       "HistogramStatistic",
@@ -351,13 +351,6 @@ private:
     bool                  m_includeOutOfBounds;
 
 };
-
-SST_ELI_INSTANTIATE_STATISTIC(HistogramStatistic, int32_t, i32);
-SST_ELI_INSTANTIATE_STATISTIC(HistogramStatistic, uint32_t, u32);
-SST_ELI_INSTANTIATE_STATISTIC(HistogramStatistic, int64_t, i64);
-SST_ELI_INSTANTIATE_STATISTIC(HistogramStatistic, uint64_t, u64);
-SST_ELI_INSTANTIATE_STATISTIC(HistogramStatistic, float, f);
-SST_ELI_INSTANTIATE_STATISTIC(HistogramStatistic, double, d);
 
 } //namespace Statistics
 } //namespace SST

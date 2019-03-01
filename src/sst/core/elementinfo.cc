@@ -23,10 +23,10 @@ namespace SST {
 **************************************************************************/
 namespace ELI {
 
-std::unique_ptr<std::set<std::string>> DataBase::loaded_{};
+std::unique_ptr<std::set<std::string>> LoadedLibraries::loaded_{};
 
 std::string
-DefaultFactoryInfo::getELIVersionString() const {
+ProvidesDefaultInfo::getELIVersionString() const {
     std::stringstream stream;
     bool first = true;
     for ( int item : getELICompiledVersion() ) {
@@ -38,7 +38,7 @@ DefaultFactoryInfo::getELIVersionString() const {
 }
 
 std::string
-ImplementsParamInfo::getParametersString() const {
+ProvidesParams::getParametersString() const {
     std::stringstream stream;
     stream << "      Parameters (" << getValidParams().size() << " total):"<<  std::endl;
     for ( auto item : getValidParams() ) {
@@ -52,7 +52,7 @@ ImplementsParamInfo::getParametersString() const {
 }
 
 std::string
-ImplementsPortsInfo::getPortsString() const {
+ProvidesPorts::getPortsString() const {
     std::stringstream stream;
     stream << "      Ports (" << getValidPorts().size() << " total):"<<  std::endl;
     for ( auto item : getValidPorts() ) {
@@ -64,7 +64,7 @@ ImplementsPortsInfo::getPortsString() const {
 }
 
 std::string
-ImplementsSubComponentInfo::getSubComponentSlotString() const {
+ProvidesSubComponentSlots::getSubComponentSlotString() const {
     std::stringstream stream;
     stream << "      SubComponentSlots (" << getSubComponentSlots().size() << " total):"<<  std::endl;
     for ( auto item : getSubComponentSlots() ) {
@@ -76,7 +76,7 @@ ImplementsSubComponentInfo::getSubComponentSlotString() const {
 }
 
 std::string
-ImplementsStatsInfo::getStatisticsString() const {
+ProvidesStats::getStatisticsString() const {
     std::stringstream stream;
     stream << "      Statistics (" << getValidStats().size() << " total):"<<  std::endl;
     for ( auto item : getValidStats() ) {
@@ -90,12 +90,30 @@ ImplementsStatsInfo::getStatisticsString() const {
 }
 
 void
-DefaultFactoryInfo::toString(std::ostream &os) const
+ProvidesDefaultInfo::toString(std::ostream &os) const
 {
   os << "    " << getName() << ": " << getDescription() << std::endl;
   os << "    Using ELI version " << getELIVersionString() << std::endl;
   os << "    Compiled on: " << getCompileDate() << ", using file: "
          << getCompileFile() << std::endl;
+}
+
+
+void
+ProvidesPorts::init()
+{
+  for (auto& item : ports_) {
+    portnames.push_back(item.name);
+  }
+}
+
+
+void
+ProvidesParams::init()
+{
+  for (auto& item : params_){
+    allowedKeys.insert(item.name);
+  }
 }
 
 }

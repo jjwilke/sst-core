@@ -7,7 +7,7 @@
 namespace SST {
 namespace ELI {
 
-class ImplementsCategoryInfo {
+class ProvidesCategory {
  public:
   uint32_t category() const {
     return cat_;
@@ -36,12 +36,12 @@ class ImplementsCategoryInfo {
   }
 
  protected:
-  template <class T> ImplementsCategoryInfo(T* UNUSED(t)) :
+  template <class T> ProvidesCategory(T* UNUSED(t)) :
     cat_(T::ELI_getCategory())
   {
   }
 
-  template <class U> ImplementsCategoryInfo(OldELITag UNUSED(tag), U* u) :
+  template <class U> ProvidesCategory(OldELITag UNUSED(tag), U* u) :
     cat_(u->category)
   {
   }

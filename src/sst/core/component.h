@@ -36,23 +36,17 @@ class SubComponent;
  */
 class Component: public BaseComponent {
 public:
-  SST_ELI_REGISTER_BASE(Component,
-    ELI::ImplementsParamInfo,
-    ELI::ImplementsPortsInfo,
-    ELI::ImplementsStatsInfo,
-    ELI::ImplementsCategoryInfo,
-    ELI::ImplementsSubComponentInfo)
-  SST_ELI_REGISTER_CTOR(ComponentId_t, SST::Params&)
+  SST_ELI_DECLARE_BASE(Component)
+  SST_ELI_DECLARE_CTOR_EXTERN(ComponentId_t, SST::Params&)
+
+  ELI::InfoLibrary<Component>* getInfoLibrary(const std::string& name);
 
     /** Constructor. Generally only called by the factory class.
         @param id Unique component ID
     */
 
-
-
     Component(ComponentId_t id);
     virtual ~Component();
-
 
     /** Register that the simulation should not end until this
         component says it is OK to. Calling this function (generally

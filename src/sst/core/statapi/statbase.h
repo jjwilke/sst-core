@@ -95,6 +95,8 @@ public:
      */
     void setFlagResetCountOnOutput(bool flag) {m_resetCountOnOutput = flag;}
 
+    static const std::vector<ElementInfoParam>& ELI_getParams();
+
     /** Set the Clear Data On Output flag.
      *  If Set, the data in the statistic will be cleared by calling 
      *  clearStatisticData().
@@ -321,10 +323,11 @@ template <typename T>
 class Statistic : public StatisticBase, public StatisticCollector<T>
 {
  public:
-  SST_ELI_REGISTER_BASE(Statistic,
+  SST_ELI_DECLARE_BASE(Statistic)
+  SST_ELI_DECLARE_INFO(
     ELI::ImplementsInterface,
-    ELI::ImplementsParamInfo)
-  SST_ELI_REGISTER_CTOR(BaseComponent*,const std::string&, const std::string&, SST::Params&)
+    ELI::ProvidesParams)
+  SST_ELI_DECLARE_CTOR(BaseComponent*,const std::string&, const std::string&, SST::Params&)
 
     using Datum = T;
     using StatisticCollector<T>::addData_impl;
@@ -342,6 +345,8 @@ class Statistic : public StatisticBase, public StatisticCollector<T>
             incrementCollectionCount();
         }
     }
+
+
 
     static FieldId_t fieldId() {
       return StatisticFieldType<T>::id();
@@ -408,56 +413,53 @@ struct ImplementsStatFields {
 
 };
 
-#define SST_ELI_REGISTER_STATISTIC_TEMPLATE(cls,lib,name,version,desc,interface)   \
+#define SST_ELI_DECLARE_STATISTIC_TEMPLATE(cls,lib,name,version,desc,interface)   \
   SST_ELI_DEFAULT_INFO(lib,name,ELI_FORWARD_AS_ONE(version),desc) \
   SST_ELI_INTERFACE_INFO(interface)
 
 #define SST_ELI_REGISTER_CUSTOM_STATISTIC(parent,cls,lib,name,version,desc) \
   bool ELI_isLoaded() const { \
-   return SST::ELI::InstantiateInfo<parent,cls>::isLoaded() \
-    && SST::ELI::InstantiateFactory<parent,cls>::isLoaded(); \
+   return SST::ELI::InstantiateBuilderInfo<parent,cls>::isLoaded() \
+    && SST::ELI::InstantiateBuilder<parent,cls>::isLoaded(); \
   } \
   SST_ELI_DEFAULT_INFO(lib,name,ELI_FORWARD_AS_ONE(version),desc) \
   SST_ELI_INTERFACE_INFO(#parent) \
   static const char* ELI_fieldName(){ return #parent "Data"; } \
   static const char* ELI_fieldShortName(){ return #parent "Data"; }
 
-#define SST_ELI_REGISTER_STATISTIC(cls,field,lib,name,version,desc,interface) \
-  bool ELI_isLoaded() const { \
-   return SST::ELI::Instantiate< \
-      SST::Statistics::Statistic<field>, \
-      cls>::isLoaded(); \
+#define SST_ELI_DECLARE_STATISTIC(cls,field,lib,name,version,desc,interface) \
+  static bool ELI_isLoaded() { \
+   return SST::Statistics::Statistic<field>::template addDerivedInfo<cls>(lib,name) \
+    && SST::Statistics::Statistic<field>::template addDerivedBuilder<cls>(lib,name) \
+    && SST::Statistics::Statistic<field>::template addDerivedInfo<SST::Statistics::NullStatistic<field>>(lib,name) \
+    && SST::Statistics::Statistic<field>::template addDerivedBuilder<SST::Statistics::NullStatistic<field>>(lib,name); \
   } \
   SST_ELI_DEFAULT_INFO(lib,name,ELI_FORWARD_AS_ONE(version),desc) \
   SST_ELI_INTERFACE_INFO(interface) \
   static const char* ELI_fieldName(){ return #field; } \
   static const char* ELI_fieldShortName(){ return #field; }
 
+
 #define SST_ELI_INSTANTIATE_STATISTIC(cls,field,shortName) \
   struct cls##_##field##_##shortName : public cls<field> { \
     cls##_##field##_##shortName(SST::BaseComponent* bc, const std::string& sn, \
            const std::string& si, SST::Params& p) : \
       cls<field>(bc,sn,si,p) {} \
-    bool ELI_isLoaded() const { \
-     return SST::ELI::InstantiateInfo< \
-        SST::Statistics::Statistic<field>, \
-        cls##_##field##_##shortName>::isLoaded() \
-         && SST::ELI::InstantiateFactory< \
-        SST::Statistics::Statistic<field>, \
-        cls##_##field##_##shortName>::isLoaded() \
-         && SST::ELI::InstantiateInfo< \
-        SST::Statistics::Statistic<field>, \
-        SST::Statistics::NullStatistic<field>>::isLoaded() \
-         && SST::ELI::InstantiateFactory< \
-        SST::Statistics::Statistic<field>, \
-        SST::Statistics::NullStatistic<field>>::isLoaded(); \
-    } \
-    static const char* ELI_fieldName(){ return #field; } \
-    static const char* ELI_fieldShortName(){ return #shortName; } \
-    static FieldId_t ELI_registerField(const char* name, const char* shortNameStr){ \
-      return StatisticFieldType<field>::registerField(name, shortNameStr); \
-    } \
+  static bool ELI_isLoaded() { \
+   return SST::Statistics::Statistic<field>::template \
+      addDerivedInfo<cls##_##field##_##shortName>(cls<field>::ELI_getLibrary(),cls<field>::ELI_getName()) \
+    && SST::Statistics::Statistic<field>::template \
+      addDerivedBuilder<cls##_##field##_##shortName>(cls<field>::ELI_getLibrary(),cls<field>::ELI_getName()) \
+    && SST::Statistics::Statistic<field>::template \
+      addDerivedInfo<SST::Statistics::NullStatistic<field>>(cls<field>::ELI_getLibrary(),cls<field>::ELI_getName()) \
+    && SST::Statistics::Statistic<field>::template \
+    addDerivedBuilder<SST::Statistics::NullStatistic<field>>(cls<field>::ELI_getLibrary(),cls<field>::ELI_getName()); \
+  } \
+   static FieldId_t ELI_registerField(const char* name, const char* shortNameStr){ \
+     return StatisticFieldType<field>::registerField(name, shortNameStr); \
+   }\
   };
+
 
 #define PP_NARG(...) PP_NARG_(__VA_ARGS__, PP_NSEQ())
 #define PP_NARG_(...) PP_ARG_N(__VA_ARGS__)
@@ -481,14 +483,14 @@ struct ImplementsStatFields {
          const std::string& si, SST::Params& p) : \
       cls<__VA_ARGS__>(bc,sn,si,p) {} \
     bool ELI_isLoaded() const { \
-     return SST::ELI::InstantiateInfo< \
+     return SST::ELI::InstantiateBuilderInfo< \
         SST::Statistics::Statistic<tuple>,name>::isLoaded() \
-         && SST::ELI::InstantiateFactory< \
+         && SST::ELI::InstantiateBuilder< \
         SST::Statistics::Statistic<tuple>,name>::isLoaded() \
-         && SST::ELI::InstantiateInfo< \
+         && SST::ELI::InstantiateBuilderInfo< \
         SST::Statistics::Statistic<tuple>, \
         SST::Statistics::NullStatistic<tuple>>::isLoaded() \
-         && SST::ELI::InstantiateFactory< \
+         && SST::ELI::InstantiateBuilder< \
         SST::Statistics::Statistic<tuple>, \
         SST::Statistics::NullStatistic<tuple>>::isLoaded(); \
     } \

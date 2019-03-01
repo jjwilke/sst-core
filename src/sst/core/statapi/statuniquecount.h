@@ -34,7 +34,7 @@ template <typename T>
 class UniqueCountStatistic : public Statistic<T>
 {
 public:
-  SST_ELI_REGISTER_STATISTIC_TEMPLATE(
+  SST_ELI_DECLARE_STATISTIC_TEMPLATE(
       UniqueCountStatistic,
       "sst",
       "UniqueCountStatistic",
@@ -82,12 +82,6 @@ private:
 
 };
 
-SST_ELI_INSTANTIATE_STATISTIC(UniqueCountStatistic, int32_t, i32);
-SST_ELI_INSTANTIATE_STATISTIC(UniqueCountStatistic, uint32_t, u32);
-SST_ELI_INSTANTIATE_STATISTIC(UniqueCountStatistic, int64_t, i64);
-SST_ELI_INSTANTIATE_STATISTIC(UniqueCountStatistic, uint64_t, u64);
-SST_ELI_INSTANTIATE_STATISTIC(UniqueCountStatistic, float, f);
-SST_ELI_INSTANTIATE_STATISTIC(UniqueCountStatistic, double, d);
 
 } //namespace Statistics
 } //namespace SST

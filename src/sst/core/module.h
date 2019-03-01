@@ -22,11 +22,12 @@ namespace SST {
     class Module {
 
     public:
-      SST_ELI_REGISTER_BASE(Module,
-         ELI::ImplementsParamInfo,
-         ELI::ImplementsInterface)
-
-      SST_ELI_REGISTER_CTORS(
+      SST_ELI_DECLARE_BASE(Module)
+      SST_ELI_DECLARE_INFO(
+         ELI::ProvidesParams,
+         ELI::ImplementsInterface
+      )
+      SST_ELI_DECLARE_CTORS(
          ELI_CTOR(SST::Params&),
          ELI_CTOR(Component*,SST::Params&)
       )
@@ -35,10 +36,10 @@ namespace SST {
       virtual ~Module() {}
 
       //by default, no params to return
-      static const std::vector<SST::ElementInfoParam>& ELI_getParams() {
-          static std::vector<SST::ElementInfoParam> var{};
-          return var;
-      }
+      //static const std::vector<SST::ElementInfoParam>& ELI_getParams() {
+      //    static std::vector<SST::ElementInfoParam> var{};
+      //    return var;
+      //}
 
     };
 
