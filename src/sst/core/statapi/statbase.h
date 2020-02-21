@@ -254,7 +254,7 @@ private:
     const StatisticGroup* getGroup() const { return m_group; }
     void setGroup(const StatisticGroup *group ) { m_group = group; }
 
-private:
+protected:
     StatisticBase(); // For serialization only
 
 private:
@@ -413,6 +413,47 @@ private:
 
 };
 
+template <>
+class Statistic<void> : public StatisticBase
+{
+ public:
+  SST_ELI_DECLARE_BASE(Statistic)
+  SST_ELI_DECLARE_INFO(
+    ELI::ProvidesInterface,
+    ELI::ProvidesParams)
+  SST_ELI_DECLARE_CTOR(BaseComponent*,const std::string&, const std::string&, SST::Params&)
+
+  void registerOutputFields(StatisticOutput * /*statOutput*/) override {}
+
+  void outputStatisticData(StatisticOutput * /*statOutput*/, bool /*EndOfSimFlag*/) override {}
+
+ protected:
+    friend class SST::Factory;
+    friend class SST::BaseComponent;
+    /** Construct a Statistic
+      * @param comp - Pointer to the parent constructor.
+      * @param statName - Name of the statistic to be registered.  This name must
+      * match the name in the ElementInfoStatistic.
+      * @param statSubId - Additional name of the statistic
+      * @param statParams - The parameters for this statistic
+      */
+
+    Statistic(BaseComponent* comp, const std::string& statName,
+              const std::string& statSubId, Params& statParams) :
+        StatisticBase(comp, statName, statSubId, statParams)
+    {
+    }
+
+    virtual ~Statistic(){}
+
+protected:
+    Statistic(){} // For serialization only
+
+};
+
+using CustomStatistic = Statistic<void>;
+
+
 template <class... Args>
 using MultiStatistic = Statistic<std::tuple<Args...>>;
 
@@ -452,15 +493,9 @@ struct ImplementsStatFields {
   SST_ELI_DEFAULT_INFO(lib,name,ELI_FORWARD_AS_ONE(version),desc) \
   SST_ELI_INTERFACE_INFO(interface)
 
-#define SST_ELI_REGISTER_CUSTOM_STATISTIC(parent,cls,lib,name,version,desc) \
-  bool ELI_isLoaded() const { \
-   return SST::ELI::InstantiateBuilderInfo<parent,cls>::isLoaded() \
-    && SST::ELI::InstantiateBuilder<parent,cls>::isLoaded(); \
-  } \
-  SST_ELI_DEFAULT_INFO(lib,name,ELI_FORWARD_AS_ONE(version),desc) \
-  SST_ELI_INTERFACE_INFO(#parent) \
-  static const char* ELI_fieldName(){ return #parent "Data"; } \
-  static const char* ELI_fieldShortName(){ return #parent "Data"; }
+#define SST_ELI_REGISTER_CUSTOM_STATISTIC(cls,lib,name,version,desc) \
+  SST_ELI_REGISTER_DERIVED(SST::Statistics::CustomStatistic,cls,lib,name,ELI_FORWARD_AS_ONE(version),desc) \
+  SST_ELI_INTERFACE_INFO("CustomStatistic")
 
 #define SST_ELI_DECLARE_STATISTIC(cls,field,lib,name,version,desc,interface) \
   static bool ELI_isLoaded() { \

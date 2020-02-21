@@ -305,13 +305,13 @@ private:
 
     bool isStatModeSupported(StatisticBase::StatMode_t mode) const override
     {
-        if (mode == StatisticBase::STAT_MODE_COUNT) {
-            return true;
-        }
-        if (mode == StatisticBase::STAT_MODE_PERIODIC) {
-            return true;
-        }
-        return false;
+      switch(mode){
+      case StatisticBase::STAT_MODE_COUNT:
+      case StatisticBase::STAT_MODE_PERIODIC:
+        return true;
+      default:
+	return false;
+      }
     }
     
 private:

@@ -114,21 +114,28 @@ bool StatisticProcessingEngine::registerStatisticCore(StatisticBase* stat)
         // If the mode is Periodic Based, the add the statistic to the
         // StatisticProcessingEngine otherwise add it as an Event Based Stat.
         UnitAlgebra collectionRate = stat->m_statParams.find<SST::UnitAlgebra>("rate", "0ns");
-        if (StatisticBase::STAT_MODE_PERIODIC == stat->getRegisteredCollectionMode()) {
-            if (false == addPeriodicBasedStatistic(collectionRate, stat)) {
-                return false;
-            }
-        } else {
-            if (false == addEventBasedStatistic(collectionRate, stat)) {
-                return false;
-            }
-        }
+        bool success = true;
+        switch (stat->getRegisteredCollectionMode()){
+        case StatisticBase::STAT_MODE_PERIODIC:
+          success = addPeriodicBasedStatistic(collectionRate, stat);
+          break;
+        case StatisticBase::STAT_MODE_COUNT:
+          success = addEventBasedStatistic(collectionRate, stat);
+          break;
+        case StatisticBase::STAT_MODE_UNDEFINED:
+          m_output.fatal(CALL_INFO, 1, "Stat mode is undefined for %s in registerStatistic",
+                         stat->getFullStatName().c_str());
+          break;
+	}
+        if (!success) return false;
     } else {
-        /* Make sure it is periodic! */
-        if ( StatisticBase::STAT_MODE_PERIODIC != stat->getRegisteredCollectionMode() ) {
-            m_output.output("ERROR: Statistics in groups must be periodic in nature!\n");
-            return false;
-        }
+        switch (stat->getRegisteredCollectionMode()){
+        case StatisticBase::STAT_MODE_PERIODIC:
+          break;
+        default:
+          m_output.output("ERROR: Statistics in groups must be periodic or dump at end\n");
+          return false;
+	}
     }
 
     /* All checks pass.  Add the stat */
