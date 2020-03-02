@@ -294,7 +294,6 @@ bool StatisticProcessingEngine::addPeriodicBasedStatistic(const UnitAlgebra& fre
             // This tcFactor is not found in the map, so create a new clock handler.
             ClockHandler = new Clock::Handler<StatisticProcessingEngine, SimTime_t>(this,
                           &StatisticProcessingEngine::handleStatisticEngineClockEvent, tcFactor);
-
             // Set the clock priority so that normal clocks events will occur before
             // this clock event.
             sim->registerClock(freq, ClockHandler, STATISTICCLOCKPRIORITY);
@@ -370,7 +369,7 @@ void StatisticProcessingEngine::setStatisticStartTime(StatisticBase* stat)
             // Also create a new Array of Statistics and relate it to the map
             statArray = new std::vector<StatisticBase*>();
             m_StartTimeMap[tcFactor] = statArray;
-        }
+        } 
 
         // The Statistic Map has the time factor registered.
         statArray = m_StartTimeMap[tcFactor];
@@ -435,7 +434,7 @@ void StatisticProcessingEngine::performStatisticOutputImpl(StatisticBase* stat, 
             return;
         }
 
-        statOutput->outputEntries(stat, endOfSimFlag);
+        statOutput->output(stat, endOfSimFlag);
 
         if (false == endOfSimFlag) {
             // Check to see if the Statistic Count needs to be reset

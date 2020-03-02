@@ -32,7 +32,7 @@ namespace Statistics {
 
     The class for statistics output to a comma separated file.
 */
-class StatisticOutputHDF5 : public StatisticOutput
+class StatisticOutputHDF5 : public StatisticFieldsOutput
 {
 public:
     SST_ELI_REGISTER_DERIVED(

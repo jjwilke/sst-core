@@ -28,6 +28,7 @@ class Factory;
 
 namespace Statistics {
 class StatisticOutput;
+class StatisticFieldsOutput;
 class StatisticProcessingEngine;
 class StatisticGroup;
 
@@ -178,6 +179,20 @@ public:
     /** Indicate if the Statistic is a NullStatistic */
     virtual bool isNullStatistic() const {return false;} 
 
+    // Required Virtual Methods:
+    /** Called by the system to tell the Statistic to register its output fields.
+      * by calling statOutput->registerField(...)
+      * @param statOutput - Pointer to the statistic output
+      */
+    virtual void registerOutputFields(StatisticFieldsOutput* statOutput) = 0;  
+
+    /** Called by the system to tell the Statistic to send its data to the 
+      * StatisticOutput to be output.
+      * @param statOutput - Pointer to the statistic output
+      * @param EndOfSimFlag - Indicates that the output is occurring at the end of simulation.
+      */
+    virtual void outputStatisticData(StatisticFieldsOutput* statOutput, bool EndOfSimFlag) = 0;
+
 protected:
     friend class SST::Statistics::StatisticProcessingEngine;
     friend class SST::Statistics::StatisticOutput;
@@ -216,19 +231,6 @@ private:
     static std::string buildStatisticFullName(const char* compName, const char* statName, const char* statSubId);
     static std::string buildStatisticFullName(const std::string& compName, const std::string& statName, const std::string& statSubId);
 
-    // Required Virtual Methods:
-    /** Called by the system to tell the Statistic to register its output fields.
-      * by calling statOutput->registerField(...)
-      * @param statOutput - Pointer to the statistic output
-      */
-    virtual void registerOutputFields(StatisticOutput* statOutput) = 0;  
-
-    /** Called by the system to tell the Statistic to send its data to the 
-      * StatisticOutput to be output.
-      * @param statOutput - Pointer to the statistic output
-      * @param EndOfSimFlag - Indicates that the output is occurring at the end of simulation.
-      */
-    virtual void outputStatisticData(StatisticOutput* statOutput, bool EndOfSimFlag) = 0;
 
     /** Indicate if the Statistic Mode is supported.
       * This allows Statistics to support STAT_MODE_COUNT and STAT_MODE_PERIODIC modes.
@@ -423,9 +425,9 @@ class Statistic<void> : public StatisticBase
     ELI::ProvidesParams)
   SST_ELI_DECLARE_CTOR(BaseComponent*,const std::string&, const std::string&, SST::Params&)
 
-  void registerOutputFields(StatisticOutput * /*statOutput*/) override {}
+  void registerOutputFields(StatisticFieldsOutput * /*statOutput*/) override {}
 
-  void outputStatisticData(StatisticOutput * /*statOutput*/, bool /*EndOfSimFlag*/) override {}
+  void outputStatisticData(StatisticFieldsOutput * /*statOutput*/, bool /*EndOfSimFlag*/) override {}
 
  protected:
     friend class SST::Factory;

@@ -73,6 +73,78 @@ public:
     /** True if this StatOutput can handle StatisticGroups */
     virtual bool acceptsGroups() const { return false; }
 
+    virtual void output(StatisticBase* output, bool endOfSim) = 0;
+
+/////////////////
+// Methods for Registering Fields (Called by Statistic Objects)
+public:
+    //by default, no params to return
+    static const std::vector<SST::ElementInfoParam>& ELI_getParams() {
+        static std::vector<SST::ElementInfoParam> var{};
+        return var;
+    }
+
+
+protected:
+    friend class SST::Simulation;
+    friend class SST::Statistics::StatisticProcessingEngine;
+
+    // Routine to have Output Check its options for validity
+    /** Have the Statistic Output check its parameters
+     * @return True if all parameters are ok; False if a parameter is missing or incorrect.
+     */
+    virtual bool checkOutputParameters() = 0;
+
+    /** Have Statistic Object print out its usage and parameter info.
+     *  Called when checkOutputParameters() returns false */
+    virtual void printUsage() = 0;
+
+
+    // Simulation Events
+    /** Indicate to Statistic Output that simulation has started.
+      * Allows object to perform any setup required. */
+    virtual void startOfSimulation() = 0;
+
+    /** Indicate to Statistic Output that simulation has ended.
+      * Allows object to perform any shutdown required. */
+    virtual void endOfSimulation() = 0;
+
+    virtual void implStartRegisterGroup(StatisticGroup* UNUSED(group)) {}
+    virtual void implStopRegisterGroup() {}
+
+private:
+    // Start / Stop of register Fields
+    void registerGroup(StatisticGroup *group);
+
+    virtual void registerStatistic(StatisticBase *stat) = 0;
+    virtual void outputGroup(StatisticGroup* group, bool endOfSimFlag) = 0;
+
+
+    void castError();
+
+protected:
+    StatisticOutput() {;} // For serialization only
+    void setStatisticOutputName(const std::string& name) {m_statOutputName = name;}
+
+    void lock() { m_lock.lock(); }
+    void unlock() { m_lock.unlock(); }
+
+private:
+    std::string      m_statOutputName;
+    Params           m_outputParameters;
+    std::recursive_mutex  m_lock;
+
+};
+
+class StatisticFieldsOutput : public StatisticOutput
+{
+public:
+    /** Construct a base StatisticOutput
+     * @param outputParameters - The parameters for the statistic Output.
+     */
+    StatisticFieldsOutput(Params& outputParameters);
+    ~StatisticFieldsOutput();
+
 /////////////////
 // Methods for Registering Fields (Called by Statistic Objects)
 public:
@@ -95,19 +167,6 @@ public:
       implRegisteredField(res);
       return res;
     }
-
-    //by default, no params to return
-    static const std::vector<SST::ElementInfoParam>& ELI_getParams() {
-        static std::vector<SST::ElementInfoParam> var{};
-        return var;
-    }
-
-//    /** Adjust the hierarchy of the fields (FUTURE SUPPORT)
-//     * @param fieldHandle - The handle of the field to adjust.
-//     * @param Level - The level of the field.
-//     * @param parent - The parent field of the field.
-//     */
-//    void setFieldHierarchy(fieldHandle_t fieldHandle, uint32_t Level, fieldHandle_t parent);
 
     /** Return the information on a registered field via the field handle.
      * @param fieldHandle - The handle of the registered field.
@@ -171,6 +230,9 @@ public:
      */
     const char* getFieldTypeShortName(fieldType_t type);
 
+    void startRegisterFields(StatisticBase *statistic);
+    void stopRegisterFields();
+
 protected:
     friend class SST::Simulation;
     friend class SST::Statistics::StatisticProcessingEngine;
@@ -208,29 +270,23 @@ protected:
       * Allows object to perform any cleanup. */
     virtual void implStopOutputEntries() = 0;
 
-    virtual void implStartRegisterGroup(StatisticGroup* UNUSED(group)) {}
-    virtual void implStopRegisterGroup() {}
     virtual void implStartOutputGroup(StatisticGroup* UNUSED(group)) {}
     virtual void implStopOutputGroup() {}
 
-
 private:
-
-    // Start / Stop of register Fields
-    void registerStatistic(StatisticBase *stat);
-    void registerGroup(StatisticGroup *group);
-
-    void startRegisterFields(StatisticBase *statistic);
-    void stopRegisterFields();
-
+    void output(StatisticBase* statistic, bool endOfSim) override {
+	outputEntries(statistic, endOfSim);
+    }
     // Start / Stop of output
     void outputEntries(StatisticBase* statistic, bool endOfSimFlag);
     void startOutputEntries(StatisticBase* statistic);
     void stopOutputEntries();
 
-    void outputGroup(StatisticGroup* group, bool endOfSimFlag);
+    void outputGroup(StatisticGroup* group, bool endOfSimFlag) override;
     void startOutputGroup(StatisticGroup* group);
     void stopOutputGroup();
+
+    void registerStatistic(StatisticBase *stat) override;
 
     void castError();
 
@@ -240,20 +296,13 @@ private:
 
 
 protected:
-    StatisticOutput() {;} // For serialization only
-    void setStatisticOutputName(const std::string& name) {m_statOutputName = name;}
-
-    void lock() { m_lock.lock(); }
-    void unlock() { m_lock.unlock(); }
+    StatisticFieldsOutput() {;} // For serialization only
 
 private:
-    std::string      m_statOutputName;
-    Params           m_outputParameters;
     FieldInfoArray_t m_outputFieldInfoArray;
     FieldNameMap_t   m_outputFieldNameMap;
     fieldHandle_t    m_highestFieldHandle;
     std::string      m_currentFieldStatName;
-    std::recursive_mutex  m_lock;
 
 };
 

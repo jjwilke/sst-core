@@ -24,7 +24,7 @@ namespace SST {
 namespace Statistics {
 
 StatisticOutputHDF5::StatisticOutputHDF5(Params& outputParameters)
-    : StatisticOutput (outputParameters),
+    : StatisticFieldsOutput (outputParameters),
     m_hFile(nullptr),
     m_currentDataSet(nullptr)
 {
