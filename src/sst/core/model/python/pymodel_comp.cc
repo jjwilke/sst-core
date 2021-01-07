@@ -59,12 +59,12 @@ std::string ComponentHolder::getName() {
 ConfigComponent* ComponentHolder::getComp() {
     return gModel->getGraph()->findComponent(id);
 }
-    
+
 
 int ComponentHolder::compare(ComponentHolder *other) {
     if (id < other->id) return -1;
     else if (id > other->id ) return 1;
-    else return 0;    
+    else return 0;
 }
 
 int PySubComponent::getSlot() {
@@ -246,7 +246,7 @@ static PyObject* compSetSubComponent(PyObject *self, PyObject *args)
     char *name = nullptr, *type = nullptr;
     int slot = 0;
 
-    
+
     if ( !PyArg_ParseTuple(args, "ss|i", &name, &type, &slot) )
         return nullptr;
 
@@ -268,38 +268,21 @@ static PyObject* compSetSubComponent(PyObject *self, PyObject *args)
     return nullptr;
 }
 
-/**
 static PyObject* compReuseStatistic(PyObject *self, PyObject *args)
 {
+    PyObject *statObj;
     char *name = nullptr;
-
-    if ( !PyArg_ParseTuple(args, "0", &statoObj) )
-        return nullptr;
-
-    c->addStatistic(statObj->configStatistic->id, name);
-
-
-    if ( !PyArg_ParseTuple(args, "s", &name) )
+    if ( !PyArg_ParseTuple(args, "sO", &name,  &statObj) )
         return nullptr;
 
     ConfigComponent *c = getComp(self);
     if ( nullptr == c ) return nullptr;
 
-    StatisticId_t stat_id = c->getNextStatisticID();
-    SST::Experimental::ConfigStatistic* stat = c->addStatistic(stat_id, name);
-    if ( nullptr != stat ) {
-        PyObject *argList = Py_BuildValue("Ok", self, stat_id);
-        PyObject *statObj = PyObject_CallObject((PyObject*)&Experimental::PyModel_StatType, argList);
-        Py_DECREF(argList);
-        return statObj;
-    }
+    ConfigStatistic *s = getStat(statObj);
+    c->reuseStatistic(name, s->id);
 
-    char errMsg[1024] = {0};
-    snprintf(errMsg, sizeof(errMsg)-1, "Failed to create statistic %s on %s. Already attached a statistic with that name ?\n", name, c->name.c_str());
-    PyErr_SetString(PyExc_RuntimeError, errMsg);
-    return nullptr;
+    return statObj;
 }
-*/
 
 static PyObject* compSetStatistic(PyObject *self, PyObject *args)
 {
@@ -311,10 +294,10 @@ static PyObject* compSetStatistic(PyObject *self, PyObject *args)
     ConfigComponent *c = getComp(self);
     if ( nullptr == c ) return nullptr;
 
-    SST::Experimental::ConfigStatistic* stat = c->enableStatistic(name);
+    ConfigStatistic* stat = c->enableStatistic(name);
     if ( nullptr != stat ) {
         PyObject *argList = Py_BuildValue("Ok", self, stat->id);
-        PyObject *statObj = PyObject_CallObject((PyObject*)&Experimental::PyModel_StatType, argList);
+        PyObject *statObj = PyObject_CallObject((PyObject*)&PyModel_StatType, argList);
         Py_DECREF(argList);
         return statObj;
     }
@@ -324,6 +307,7 @@ static PyObject* compSetStatistic(PyObject *self, PyObject *args)
     PyErr_SetString(PyExc_RuntimeError, errMsg);
     return nullptr;
 }
+
 
 static PyObject* compSetCoords(PyObject *self, PyObject *args)
 {
@@ -366,7 +350,7 @@ static PyObject* compSetStatisticLoadLevel(PyObject *self, PyObject *args) {
 
     argOK = PyArg_ParseTuple(args, "H|i", &loadLevel, &apply_to_children);
     loadLevel = loadLevel & 0xff;
-    
+
     if (argOK) {
         c->setStatisticLoadLevel(loadLevel,apply_to_children);
     }
@@ -428,7 +412,7 @@ static PyObject* compEnableStatistics(PyObject *self, PyObject *args)
         argOK = PyArg_ParseTuple(args, "O!|O!i", &PyList_Type, &statList, &PyDict_Type, &statParamDict, &apply_to_children);
         if ( argOK )  Py_INCREF(statList);
     }
-        
+
     if (argOK) {
         // Generate the Statistic Parameters
         auto params = generateStatisticParameters(statParamDict);
@@ -582,7 +566,7 @@ static int subCompInit(ComponentPy_t *self, PyObject *args, PyObject *UNUSED(kwd
         return -1;
 
     PySubComponent *obj = new PySubComponent(self,id);
-    
+
     self->obj = obj;
 
     gModel->getOutput()->verbose(CALL_INFO, 3, 0, "Creating subcomponent [%s] of type [%s]]\n", getComp((PyObject*)self)->name.c_str(), getComp((PyObject*)self)->type.c_str());
@@ -627,6 +611,9 @@ static PyMethodDef subComponentMethods[] = {
     {   "setStatistic",
         compSetStatistic, METH_VARARGS,
         "Bind a statistic with name <name>"},
+    {   "reuseStatistic",
+        compReuseStatistic, METH_VARARGS,
+        "Reuse a statistic for the binding"},
     {   "setSubComponent",
         compSetSubComponent, METH_VARARGS,
         "Bind a subcomponent to slot <name>, with type <type>"},
