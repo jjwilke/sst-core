@@ -599,14 +599,18 @@ Statistics::StatisticBase*
 BaseComponent::createEnabledAllStatistic(Params& params, const std::string &name, const std::string &statSubId,
                                          StatCreateFunction fxn)
 {
-    for (auto* stat : m_enabledAllStats){
-        if (stat->getStatName() == name && stat->getStatSubId() == statSubId){
-            return stat;
-        }
+    auto iter = m_enabledAllStats.find(name);
+    if (iter != m_enabledAllStats.end()){
+      auto& submap = iter->second;
+      auto subiter = submap.find(statSubId);
+      if (subiter != submap.end()){
+        return subiter->second;
+      }
     }
 
+    //a matching statistic was not found
     auto* stat = createStatistic(params, my_info->allStatConfig->params, name, statSubId, std::move(fxn));
-    m_enabledAllStats.push_back(stat);
+    m_enabledAllStats[name][statSubId] = stat;
     return stat;
 }
 
@@ -622,23 +626,44 @@ BaseComponent::createExplicitlyEnabledStatistic(Params &params, StatisticId_t id
                   name.c_str());
     }
 
-    auto iter = m_explicitlyEnabledStats.find(id);
-    if (iter != m_explicitlyEnabledStats.end()){
-        return iter->second;
-    }
-
     auto piter = my_info->statConfigs->find(id);
     if (piter == my_info->statConfigs->end()){
         out.fatal(CALL_INFO, 1, 0,
                   "Explicitly enabled statistic '%s' does not have parameters mapped to its ID",
                   name.c_str());
     }
+    auto& cfg = piter->second;
+    if (cfg.shared){
+      auto iter = m_explicitlyEnabledSharedStats.find(id);
+      if (iter != m_explicitlyEnabledSharedStats.end()){
+          return iter->second;
+      } else {
+        //no subid
+        auto* stat = createStatistic(params, cfg.params, cfg.name, "", std::move(fxn));
+        m_explicitlyEnabledSharedStats[id] = stat;
+        return stat;
+      }
+    } else {
+      auto iter = m_explicitlyEnabledUniqueStats.find(id);
+      if (iter != m_explicitlyEnabledUniqueStats.end()){
+        auto& map = iter->second;
+        auto subiter = map.find(name);
+        if (subiter != map.end()){
+          auto& submap = subiter->second;
+          auto subsubiter = submap.find(statSubId);
+          if (subsubiter != submap.end()){
+            return subsubiter->second;
+          }
+        }
+      }
+      //stat does not exist yet
+      auto* stat = createStatistic(params, cfg.params, name, statSubId, std::move(fxn));
+      m_explicitlyEnabledUniqueStats[id][name][statSubId] = stat;
+      return stat;
+    }
 
-    const std::string paramStatName = piter->second.params.find<std::string>("name", name);
-    const std::string paramSubId = piter->second.params.find<std::string>("subid", statSubId);
-    auto* stat = createStatistic(params, piter->second.params, paramStatName, paramSubId, std::move(fxn));
-    m_explicitlyEnabledStats[id] = stat;
-    return stat;
+    //unreachable
+    return nullptr;
 }
 
 void

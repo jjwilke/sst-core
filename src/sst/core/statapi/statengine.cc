@@ -59,8 +59,7 @@ void StatisticProcessingEngine::setup(ConfigGraph *graph)
             ConfigComponent *ccomp = graph->findComponent(compID);
             if ( ccomp ) { /* Should always be true */
                 for ( auto &kv : cfg.second.statMap ) {
-                    ccomp->enableStatistic(kv.first);
-                    ccomp->setStatisticParameters(kv.first, kv.second);
+                    ccomp->enableStatistic(kv.first, kv.second);
                 }
             }
         }

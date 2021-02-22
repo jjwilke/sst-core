@@ -287,14 +287,14 @@ ConfigStatistic* ConfigComponent::createStatistic()
 }
 
 
-ConfigStatistic* ConfigComponent::enableStatistic(const std::string& statisticName, bool recursively)
+ConfigStatistic* ConfigComponent::enableStatistic(const std::string& statisticName, const SST::Params& params, bool recursively)
 {
     // NOTE: For every statistic in the statistics List, there must be
     //       a corresponding params entry in enabledStatParams list.  The two
     //       lists will always be the same size.
     if ( recursively ) {
         for ( auto &sc : subComponents ) {
-            sc.enableStatistic(statisticName, true);
+            sc.enableStatistic(statisticName, params, true);
         }
     }
     
@@ -306,6 +306,7 @@ ConfigStatistic* ConfigComponent::enableStatistic(const std::string& statisticNa
         // in case of enabledAllStats == true.
         enabledAllStats = true;
         allStatConfig.id = STATALL_ID;
+        allStatConfig.params.insert(params);
         return &allStatConfig;
     } else if (!Factory::getFactory()->DoesComponentInfoStatisticNameExist(type, statisticName)){
         //this is not a valid statistic
@@ -321,6 +322,7 @@ ConfigStatistic* ConfigComponent::enableStatistic(const std::string& statisticNa
             if (parent){
                 ConfigStatistic* cs = parent->insertStatistic(stat_id);
                 cs->id = stat_id;
+                cs->params.insert(params);
                 return cs;
             }
         } else {
@@ -331,6 +333,7 @@ ConfigStatistic* ConfigComponent::enableStatistic(const std::string& statisticNa
     
     ConfigStatistic& cs = statistics[stat_id];
     cs.id = stat_id;
+    cs.params.insert(params);
     return &cs;
 }
 
@@ -716,8 +719,7 @@ ConfigGraph::setStatisticLoadLevel(uint8_t loadLevel)
     statLoadLevel = loadLevel;
 }
 
-
-
+/**
 void
 ConfigGraph::enableStatisticForComponentName(const std::string& ComponentName, const std::string& statisticName, bool recursively)
 {
@@ -732,9 +734,7 @@ ConfigGraph::enableStatisticForComponentName(const std::string& ComponentName, c
         }
     }
 }
-
-
-
+*/
 
 
 template <class PredicateFunc, class UnaryFunc>
@@ -750,40 +750,27 @@ size_t for_each_subcomp_if(ConfigComponent &c, PredicateFunc p, UnaryFunc f) {
     return count;
 }
 
-
+/**
 void
-ConfigGraph::enableStatisticForComponentType(const std::string& ComponentType, const std::string& statisticName, bool recursively)
+ConfigGraph::enableStatisticForComponentType(const std::string& ComponentType, const std::string& statisticName,
+                                             SST::Params& params, bool recursively)
 {
-    if ( ComponentType == STATALLFLAG ) {
-        for ( auto &c : comps ) {
-            for_each_subcomp_if(c,
-                    [](ConfigComponent & UNUSED(c)) -> bool {return true;},
-                                [statisticName](ConfigComponent &c){ c.enableStatistic(statisticName); } );
-        }
-    } else {
-        for ( auto &c : comps ) {
-            for_each_subcomp_if(c,
-                    [ComponentType](ConfigComponent &c) -> bool { return c.type == ComponentType; },
-                                [statisticName,recursively](ConfigComponent &c){ c.enableStatistic(statisticName,recursively);} );
-        }
+    bool statall = ComponentType == STATALLFLAG;
+    for (auto& c : comps){
+      if (statall || c.type == ComponentType){
+        c.enableStatistic(statisticName, params, recursively);
+      }
     }
 }
 
 void
 ConfigGraph::setStatisticLoadLevelForComponentType(const std::string& ComponentType, uint8_t level, bool recursively)
 {
-    if ( ComponentType == STATALLFLAG ) {
-        for ( auto &c : comps ) {
-            for_each_subcomp_if(c,
-                    [](ConfigComponent & UNUSED(c)) -> bool {return true;},
-                                [level](ConfigComponent &c){ c.setStatisticLoadLevel(level); } );
-        }
-    } else {
-        for ( auto &c : comps ) {
-            for_each_subcomp_if(c,
-                    [ComponentType](ConfigComponent &c) -> bool { return c.type == ComponentType; },
-                                [level,recursively](ConfigComponent &c){ c.setStatisticLoadLevel(level,recursively);} );
-        }
+    bool statall = ComponentType == STATALLFLAG;
+    for (auto& c : comps){
+      if (statall | c.type == ComponentType){
+        c.setStatisticLoadLevel(leve);
+      }
     }
 }
 
@@ -819,6 +806,7 @@ ConfigGraph::addStatisticParameterForComponentType(const std::string& ComponentT
         }
     }
 }
+*/
 
 void
 ConfigGraph::addLink(ComponentId_t comp_id, const std::string& link_name, const std::string& port, const std::string& latency_str, bool no_cut)

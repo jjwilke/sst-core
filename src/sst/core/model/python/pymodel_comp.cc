@@ -268,7 +268,7 @@ static PyObject* compSetSubComponent(PyObject *self, PyObject *args)
     return nullptr;
 }
 
-static PyObject* compReuseStatistic(PyObject *self, PyObject *args)
+static PyObject* compSetStatistic(PyObject *self, PyObject *args)
 {
     PyObject *statObj;
     char *name = nullptr;
@@ -284,37 +284,18 @@ static PyObject* compReuseStatistic(PyObject *self, PyObject *args)
     return statObj;
 }
 
-static PyObject* compSetStatistic(PyObject *self, PyObject *args)
+static PyObject* compEnableStatistic(PyObject *self, PyObject *args)
 {
     char *name = nullptr;
-    char *subid = nullptr;
+    PyObject* py_params = nullptr;
 
-    if ( !PyArg_ParseTuple(args, "s|s", &name, &subid) )
+    if ( !PyArg_ParseTuple(args, "s|O", &name, &py_params) ){
         return nullptr;
-
+    }
     ConfigComponent *c = getComp(self);
     if ( nullptr == c ) return nullptr;
 
-    ConfigStatistic* stat = c->enableStatistic(name);
-    if ( nullptr != stat ) {
-        PyObject *argList = Py_BuildValue("Ok", self, stat->id);
-        PyObject *statObj = PyObject_CallObject((PyObject*)&PyModel_StatType, argList);
-        Py_DECREF(argList);
-
-        stat->addParameter("name", name, true);
-        if (subid){
-          stat->addParameter("subid", subid);
-        } else {
-          stat->addParameter("subid", "");
-        }
-
-        return statObj;
-    }
-
-    char errMsg[1024] = {0};
-    snprintf(errMsg, sizeof(errMsg)-1, "Failed to create statistic %s on %s. Already attached a statistic with that name ?\n", name, c->name.c_str());
-    PyErr_SetString(PyExc_RuntimeError, errMsg);
-    return nullptr;
+    return buildEnabledStatistic(c, name, py_params, false/*do not apply to children*/);
 }
 
 
@@ -383,12 +364,7 @@ static PyObject* compEnableAllStatistics(PyObject *self, PyObject *args)
     argOK = PyArg_ParseTuple(args, "|O!i", &PyDict_Type, &statParamDict,&apply_to_children);
 
     if (argOK) {
-      c->enableStatistic(STATALLFLAG, apply_to_children);
-
-      //now add the statistic parameters
-      for ( auto p : generateStatisticParameters(statParamDict) ) {
-          c->addStatisticParameter(STATALLFLAG, p.first, p.second, apply_to_children);
-      }
+      c->enableStatistic(STATALLFLAG, pythonToCppParams(statParamDict), apply_to_children);
     } else {
         // ParseTuple Failed, return NULL for error
         return nullptr;
@@ -403,9 +379,8 @@ static PyObject* compEnableStatistics(PyObject *self, PyObject *args)
     PyObject*     statList = nullptr;
     char*         stat_str = nullptr;
     PyObject*     statParamDict = nullptr;
-    Py_ssize_t    numStats = 0;
     int           apply_to_children = 0;
-    ConfigComponent *c = getComp(self);
+    ConfigComponent *cc = getComp(self);
 
     PyErr_Clear();
 
@@ -422,33 +397,16 @@ static PyObject* compEnableStatistics(PyObject *self, PyObject *args)
         if ( argOK )  Py_INCREF(statList);
     }
 
+
     if (argOK) {
         // Generate the Statistic Parameters
-        auto params = generateStatisticParameters(statParamDict);
-
         // Make sure we have a list
         if ( !PyList_Check(statList) ) {
             return nullptr;
         }
-
-        // Get the Number of Stats in the list, and enable them separately,
-        // also set their parameters
-        numStats = PyList_Size(statList);
-        for (uint32_t x = 0; x < numStats; x++) {
-            PyObject* pylistitem = PyList_GetItem(statList, x);
-            PyObject* pyname = PyObject_CallMethod(pylistitem, (char*)"__str__", nullptr);
-
-            //TODO create an exception that prints the name of the stat and the component
-            std::string statName = SST_ConvertToCppString(pyname);
-
-            c->enableStatistic(statName,apply_to_children);
-
-            // Add the parameters
-            for ( auto p : params ) {
-                c->addStatisticParameter(statName, p.first, p.second, apply_to_children);
-            }
-        }
+        PyObject* statObjList = buildEnabledStatistics(cc, statList, statParamDict, apply_to_children);
         Py_XDECREF(statList);
+        return statObjList;
     } else {
         // ParseTuple Failed, return NULL for error
         return nullptr;
@@ -466,39 +424,33 @@ static PyObject* compCreateStatistic(PyObject *self, PyObject *args)
 
     //we can have 1 or 2 arguments
     //mandatory name
-    //optional subid
     //optional parameters
-    PyObject* name = nullptr;
-    PyObject* subid = nullptr;
+    char* name = nullptr;
+    PyObject* py_params;
 
-    if ( !PyArg_ParseTuple(args, "O|O", &name, &subid) )
+    if ( !PyArg_ParseTuple(args, "s|O", &name, &py_params) )
         return nullptr;
 
     if ( nullptr == comp ) return nullptr;
-    ConfigStatistic *stat = comp ? comp->createStatistic() : nullptr;
-    if ( nullptr == stat ){
+
+    ConfigStatistic* cs = comp->createStatistic();
+    if (cs == nullptr){
       char errMsg[1024] = {0};
-      snprintf(errMsg, sizeof(errMsg)-1, "Failed to create statistic on %s.\n", comp->name.c_str());
+      snprintf(errMsg, sizeof(errMsg)-1, "Failed to create statistic '%s' on '%s'",
+               name, comp->name.c_str());
       PyErr_SetString(PyExc_RuntimeError, errMsg);
       return nullptr;
     }
 
-    stat->addParameter("name", SST_ConvertToCppString(name), true);
-    if (subid && subid != Py_None){
-      stat->addParameter("subid", SST_ConvertToCppString(subid), true);
-    } else {
-      stat->addParameter("subid", "", true); //empty
+    if (py_params){
+      cs->params.insert(pythonToCppParams(py_params));
     }
 
-    if ( nullptr != stat ) {
-      PyObject *argList = Py_BuildValue("Ok", self, stat->id);
-      PyObject *statObj = PyObject_CallObject((PyObject*)&PyModel_StatType, argList);
-      Py_DECREF(argList);
-      return statObj;
-    }
+    std::cout << "Built stat " << cs->id
+              << " on component " << comp->id
+              << std::endl;
 
-    //this should be unreachable
-    return nullptr;
+    return buildStatisticObject(self, cs->id);
 }
 
 
@@ -528,7 +480,7 @@ static PyMethodDef componentMethods[] = {
         compSetStatisticLoadLevel, METH_VARARGS,
         "Sets the statistics load level for this component"},
     {   "createStatistic",
-        compCreateStatistic, METH_O,
+        (PyCFunction) compCreateStatistic, METH_VARARGS | METH_KEYWORDS,
         "Create a Statistics in the component with optional parameters"},
     {   "enableAllStatistics",
         compEnableAllStatistics, METH_VARARGS,
@@ -665,11 +617,11 @@ static PyMethodDef subComponentMethods[] = {
     {   "enableStatistics",
         compEnableStatistics, METH_VARARGS,
         "Enables Multiple Statistics in the component with optional parameters"},
+    {   "enableStatistic",
+        compEnableStatistic, METH_VARARGS,
+        "Enable a statistic with a name and return a handle to it"},
     {   "setStatistic",
         compSetStatistic, METH_VARARGS,
-        "Bind a statistic with name <name>"},
-    {   "reuseStatistic",
-        compReuseStatistic, METH_VARARGS,
         "Reuse a statistic for the binding"},
     {   "setSubComponent",
         compSetSubComponent, METH_VARARGS,
