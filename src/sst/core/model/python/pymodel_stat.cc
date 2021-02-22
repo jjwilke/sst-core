@@ -55,11 +55,6 @@ static int statInit(StatisticPy_t *self, PyObject *args, PyObject *UNUSED(kwds))
     if ( !PyArg_ParseTuple(args, "k", &id) )
         return -1;
 
-    std::cout << "refcount ctor=" << args->ob_refcnt << std::endl;
-
-    std::cout << "Creating statistic with id " << id
-              << " from args " << args
-              << std::endl;
     PyStatistic *obj = new PyStatistic(id);
     self->obj = obj;
 

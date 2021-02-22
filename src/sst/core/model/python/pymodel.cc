@@ -1139,16 +1139,7 @@ SST::Params SST::Core::pythonToCppParams(PyObject* statParamDict)
 PyObject* SST::Core::buildStatisticObject(StatisticId_t id)
 {
   PyObject *argList = Py_BuildValue("(k)", id);
-  StatisticId_t what = 0;
-  PyArg_ParseTuple(argList, "k", &wtf);
-
-  std::cout << "what=" << what
-            << " on args=" << argList
-            << std::endl;
-
-  std::cout << "refcount=" << argList->ob_refcnt << std::endl;
   PyObject *statObj = PyObject_CallObject((PyObject*)&PyModel_StatType, argList);
-
   Py_DECREF(argList);
   return statObj;
 }

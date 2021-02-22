@@ -281,6 +281,7 @@ static PyObject* compSetStatistic(PyObject *self, PyObject *args)
     ConfigStatistic *s = getStat(statObj);
     c->reuseStatistic(name, s->id);
 
+    Py_INCREF(statObj);
     return statObj;
 }
 
@@ -446,11 +447,10 @@ static PyObject* compCreateStatistic(PyObject *self, PyObject *args)
       cs->params.insert(pythonToCppParams(py_params));
     }
 
-    std::cout << "Built stat " << cs->id
-              << " on component " << comp->id
-              << std::endl;
+    cs->shared = true;
+    cs->name = name;
 
-    return buildStatisticObject(self, cs->id);
+    return buildStatisticObject(cs->id);
 }
 
 
@@ -480,7 +480,7 @@ static PyMethodDef componentMethods[] = {
         compSetStatisticLoadLevel, METH_VARARGS,
         "Sets the statistics load level for this component"},
     {   "createStatistic",
-        (PyCFunction) compCreateStatistic, METH_VARARGS | METH_KEYWORDS,
+        compCreateStatistic, METH_VARARGS,
         "Create a Statistics in the component with optional parameters"},
     {   "enableAllStatistics",
         compEnableAllStatistics, METH_VARARGS,

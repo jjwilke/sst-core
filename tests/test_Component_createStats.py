@@ -34,14 +34,15 @@ def connect(src_port, dst_port, comps, row, col, shift_x=0, shift_y=0, latency="
 for row in range(size):
   for col in range(size):
     connect("Nlink", "Slink", comps, row, col, shift_y=1)
-    connect("Slink", "Nlink", comps, row, col, shift_y=-1)
     connect("Elink", "Wlink", comps, row, col, shift_x=1)
-    connect("Wlink", "Elink", comps, row, col, shift_x=-1)
 
     comp = comps[row][col]
+    comp.addParams(params)
     counts = comp.createStatistic("counts", {"type" : "sst.HistogramStatistic"})
-    print("Created stat", counts)
     comp.setStatistic("N", counts)
     comp.setStatistic("S", counts)
     comp.setStatistic("E", counts)
     comp.setStatistic("W", counts)
+
+sst.setStatisticLoadLevel(7)
+sst.setStatisticOutput("sst.statOutputCSV")
